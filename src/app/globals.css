@@ -47,7 +47,14 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
 }
-
+.leaflet-control-zoom a {
+  background: white !important;
+  color: #333 !important;
+  border-color: #ddd !important;
+}
+.leaflet-control-zoom a:hover {
+  background: #f4f4f4 !important;
+}
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
