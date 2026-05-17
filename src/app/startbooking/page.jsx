@@ -239,6 +239,10 @@ export default function TruckItApp() {
   const [booked, setBooked] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mode, setMode] = useState("fresh"); // "fresh" | "empty"
+  const [emptyRoutes, setEmptyRoutes] = useState([]);
+  const [loadingEmpty, setLoadingEmpty] = useState(false);
+  const [selectedEmptyRoute, setSelectedEmptyRoute] = useState(null);
   const router = useRouter();
 
   const selectedTruckData = TRUCK_TYPES.find((t) => t.id === selectedTruck) ?? TRUCK_TYPES[1];
@@ -304,9 +308,10 @@ export default function TruckItApp() {
         body: JSON.stringify({
           pickup: from,
           dropoff: to,
-          truckType: selectedTruckData.label,
-          price: totalPrice,
-          distance: distanceKm
+          truckType: mode === "empty" ? selectedEmptyRoute.truckType : selectedTruckData.label,
+          price: mode === "empty" ? Math.round(totalPrice * 0.7) : totalPrice, // 30% discount
+          distance: distanceKm,
+          driverId: mode === "empty" ? selectedEmptyRoute.driverId._id : undefined
         }),
       });
 
@@ -326,8 +331,52 @@ export default function TruckItApp() {
 
   useEffect(() => {
     handleSearch();
+    // Fetch empty routes
+    setLoadingEmpty(true);
+    fetch("/api/empty-routes")
+      .then(res => res.json())
+      .then(data => setEmptyRoutes(data.routes || []))
+      .catch(console.error)
+      .finally(() => setLoadingEmpty(false));
     // eslint-disable-next-line
   }, []);
+
+  // Handle clicking an empty route
+  const handleSelectEmptyRoute = async (route) => {
+    setSelectedEmptyRoute(route);
+    setFrom(route.origin);
+    setTo(route.destination);
+    
+    // Auto-search this route
+    setLoading(true);
+    setError("");
+    setDistanceKm(null);
+    setDurationMin(null);
+    setRouteGeometry(null);
+    setCoordA(null);
+    setCoordB(null);
+    setBooked(false);
+    try {
+      const [a, b] = await Promise.all([geocode(route.origin), geocode(route.destination)]);
+      if (!a || !b) throw new Error("Could not geocode origin or destination");
+      setCoordA(a);
+      setCoordB(b);
+      try {
+        const routeData = await getRouteDistance(a, b);
+        setDistanceKm(routeData.distanceKm);
+        setDurationMin(routeData.durationMin);
+        setRouteGeometry(routeData.geometry);
+      } catch {
+        const d = haversineDistance(a, b);
+        setDistanceKm(d);
+        setDurationMin(Math.round((d / 60) * 60));
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Routing error");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <>
@@ -374,10 +423,30 @@ export default function TruckItApp() {
                   boxShadow: "2px 0 12px rgba(0,0,0,0.04)",
                 }}
               >
-                {/* ── Book section ── */}
+                {/* ── Mode Switcher ── */}
                 <div style={{ padding: "20px 18px 0" }}>
+                  <div className="flex bg-gray-100 rounded-xl p-1 mb-4">
+                    <button
+                      onClick={() => setMode("fresh")}
+                      className={`flex-1 text-sm font-bold py-2 rounded-lg transition-colors ${mode === "fresh" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                    >
+                      Book Fresh
+                    </button>
+                    <button
+                      onClick={() => setMode("empty")}
+                      className={`flex-1 text-sm font-bold py-2 rounded-lg transition-colors ${mode === "empty" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                    >
+                      Empty Returns 📉
+                    </button>
+                  </div>
+                </div>
+
+                {mode === "fresh" ? (
+                  <>
+                {/* ── Book section ── */}
+                <div style={{ padding: "0 18px" }}>
                   <p style={{ fontWeight: 700, fontSize: "17px", marginBottom: "14px", color: "#111827", letterSpacing: "-0.3px" }}>
-                    Book a Truck
+                    Find a Truck
                   </p>
 
                   {/* Inputs with connector */}
@@ -491,7 +560,8 @@ export default function TruckItApp() {
                 <div style={{ margin: "16px 18px 0", borderTop: "1px solid #f1f5f9" }} />
 
                 {/* ── Vehicle selector ── */}
-                <div style={{ padding: "14px 18px 0" }}>
+                {mode === "fresh" && (
+                  <div style={{ padding: "14px 18px 0" }}>
                   <p style={{ fontSize: "11px", fontWeight: 600, color: "#9ca3af", letterSpacing: "0.8px", marginBottom: "10px", textTransform: "uppercase" }}>
                     Select Vehicle
                   </p>
@@ -506,7 +576,7 @@ export default function TruckItApp() {
                       />
                     ))}
                   </div>
-                </div>
+                )}
 
                 {/* ── Book button ── */}
                 <div style={{ padding: "16px 18px 22px", marginTop: "auto" }}>
@@ -539,7 +609,9 @@ export default function TruckItApp() {
                         }}
                       >
                         {bookingLoading ? "Booking..." : (distanceKm
-                          ? `Book ${selectedTruckData.icon} ${selectedTruckData.label} · ₹${totalPrice?.toLocaleString()}`
+                          ? mode === "empty" 
+                            ? `Book ${selectedEmptyRoute?.truckType || 'Truck'} · ₹${Math.round(totalPrice * 0.7).toLocaleString()} (-30%)`
+                            : `Book ${selectedTruckData.icon} ${selectedTruckData.label} · ₹${totalPrice?.toLocaleString()}`
                           : "Search a route first")}
                       </motion.button>
                     ) : (
@@ -562,10 +634,10 @@ export default function TruckItApp() {
                           Booking Confirmed!
                         </div>
                         <div style={{ fontSize: "12.5px", color: "#6b7280" }}>
-                          {selectedTruckData.icon} {selectedTruckData.label} · {from} → {to}
+                          {mode === "empty" ? selectedEmptyRoute?.truckType : `${selectedTruckData.icon} ${selectedTruckData.label}`} · {from} → {to}
                         </div>
                         <div style={{ fontSize: "12.5px", color: "#6b7280", marginTop: "2px" }}>
-                          ₹{totalPrice?.toLocaleString()} · {durationMin ? formatDuration(durationMin) : ""}
+                          ₹{mode === "empty" ? Math.round(totalPrice * 0.7).toLocaleString() : totalPrice?.toLocaleString()} · {durationMin ? formatDuration(durationMin) : ""}
                         </div>
                         <button
                           onClick={() => setBooked(false)}

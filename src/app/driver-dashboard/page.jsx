@@ -143,6 +143,7 @@ export default function DriverDashboard() {
             </div>
             {[
               { id: "overview", label: "Overview", icon: <LayoutDashboard size={20} /> },
+              { id: "post-route", label: "Post Empty Route", icon: <MapPin size={20} /> },
               { id: "find-loads", label: "Find Loads", icon: <Search size={20} /> },
               { id: "active", label: "Active Trips", icon: <Truck size={20} /> },
               { id: "past", label: "Past Trips", icon: <CheckCircle size={20} /> },
@@ -250,6 +251,68 @@ export default function DriverDashboard() {
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* TAB: POST EMPTY ROUTE */}
+          {activeTab === "post-route" && (
+            <div className="p-8 overflow-y-auto h-full max-w-2xl">
+              <h2 className="text-3xl font-extrabold font-serif mb-6 text-gray-900">Post Empty Return Route</h2>
+              <p className="text-gray-500 mb-6">Let customers book your truck at a discounted rate while you return empty.</p>
+              
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                try {
+                  const res = await fetch("/api/empty-routes", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("token")}` },
+                    body: JSON.stringify({
+                      origin: formData.get("origin"),
+                      destination: formData.get("destination"),
+                      truckType: formData.get("truckType"),
+                      date: formData.get("date")
+                    })
+                  });
+                  if (res.ok) {
+                    toast.success("Empty route posted successfully!");
+                    e.target.reset();
+                  } else {
+                    toast.error("Failed to post route");
+                  }
+                } catch (err) {
+                  toast.error("An error occurred");
+                }
+              }} className="space-y-6">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Origin (City)</label>
+                  <input required name="origin" type="text" placeholder="e.g. Pune" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm" />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Destination (City)</label>
+                  <input required name="destination" type="text" placeholder="e.g. Mumbai" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm" />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Date of Return</label>
+                  <input required name="date" type="date" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm" />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Truck Type</label>
+                  <select required name="truckType" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm">
+                    <option value="Mini Truck (1-2 Ton)">Mini Truck (1-2 Ton)</option>
+                    <option value="Medium Truck (3-5 Ton)">Medium Truck (3-5 Ton)</option>
+                    <option value="Heavy Truck (6-10 Ton)">Heavy Truck (6-10 Ton)</option>
+                    <option value="Trailer (20+ Ton)">Trailer (20+ Ton)</option>
+                  </select>
+                </div>
+
+                <button type="submit" className="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold shadow-md hover:bg-gray-800 transition-colors w-full">
+                  Post Route Now
+                </button>
+              </form>
             </div>
           )}
 
