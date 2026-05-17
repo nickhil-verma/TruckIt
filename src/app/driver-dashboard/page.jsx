@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import toast from "react-hot-toast";
-import { LayoutDashboard, Search, Truck, CheckCircle, MessageSquare, Settings, CreditCard, Check, CheckCheck, MapPin } from "lucide-react";
+import { LayoutDashboard, Search, Truck, CheckCircle, MessageSquare, Settings, CreditCard, Check, CheckCheck, MapPin, PlusCircle } from "lucide-react";
 
 export default function DriverDashboard() {
   const [trips, setTrips] = useState([]);
@@ -19,6 +19,11 @@ export default function DriverDashboard() {
 
   // User state
   const [user, setUser] = useState(null);
+  const [postedRoutes, setPostedRoutes] = useState([]);
+  
+  // Post Route form state
+  const [routeForm, setRouteForm] = useState({ origin: "", destination: "", date: "", truckType: "medium" });
+
   const router = useRouter();
 
   const fetchTrips = (token) => {
@@ -30,7 +35,12 @@ export default function DriverDashboard() {
     // Fetch all pending requests
     fetch("/api/trips?pending=true", { headers: { "Authorization": `Bearer ${token}` } })
       .then(res => res.json())
-      .then(data => setPendingTrips(data.trips || []))
+      .then(data => setPendingTrips(data.trips || []));
+
+    // Fetch driver's posted empty routes
+    fetch(`/api/route-posts?driverId=${JSON.parse(localStorage.getItem("user")).id}`, { headers: { "Authorization": `Bearer ${token}` } })
+      .then(res => res.json())
+      .then(data => setPostedRoutes(data.routes || []))
       .finally(() => setLoading(false));
   };
 
@@ -120,6 +130,28 @@ export default function DriverDashboard() {
     }
   };
 
+  const handlePostRoute = async (e) => {
+    e.preventDefault();
+    if (!routeForm.origin || !routeForm.destination || !routeForm.date) return;
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch("/api/route-posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify(routeForm)
+      });
+      if (res.ok) {
+        toast.success("Empty return route posted successfully!");
+        setRouteForm({ origin: "", destination: "", date: "", truckType: "medium" });
+        fetchTrips(token);
+      } else {
+        toast.error("Failed to post route");
+      }
+    } catch (err) {
+      toast.error("Error posting route");
+    }
+  };
+
   const handleOpenChat = (trip) => {
     setSelectedTrip(trip);
     setActiveTab("chat");
@@ -143,7 +175,7 @@ export default function DriverDashboard() {
             </div>
             {[
               { id: "overview", label: "Overview", icon: <LayoutDashboard size={20} /> },
-              { id: "post-route", label: "Post Empty Route", icon: <MapPin size={20} /> },
+              { id: "post-route", label: "Post Empty Route", icon: <PlusCircle size={20} /> },
               { id: "find-loads", label: "Find Loads", icon: <Search size={20} /> },
               { id: "active", label: "Active Trips", icon: <Truck size={20} /> },
               { id: "past", label: "Past Trips", icon: <CheckCircle size={20} /> },
@@ -254,65 +286,62 @@ export default function DriverDashboard() {
             </div>
           )}
 
-          {/* TAB: POST EMPTY ROUTE */}
+          {/* TAB: POST ROUTE */}
           {activeTab === "post-route" && (
-            <div className="p-8 overflow-y-auto h-full max-w-2xl">
+            <div className="p-8 overflow-y-auto h-full">
               <h2 className="text-3xl font-extrabold font-serif mb-6 text-gray-900">Post Empty Return Route</h2>
-              <p className="text-gray-500 mb-6">Let customers book your truck at a discounted rate while you return empty.</p>
+              <p className="text-gray-500 mb-8 max-w-2xl">Returning empty from a delivery? Post your route here. Customers looking for a truck on this route can book you directly at a discounted rate.</p>
               
-              <form onSubmit={async (e) => {
-                e.preventDefault();
-                const formData = new FormData(e.target);
-                try {
-                  const res = await fetch("/api/empty-routes", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("token")}` },
-                    body: JSON.stringify({
-                      origin: formData.get("origin"),
-                      destination: formData.get("destination"),
-                      truckType: formData.get("truckType"),
-                      date: formData.get("date")
-                    })
-                  });
-                  if (res.ok) {
-                    toast.success("Empty route posted successfully!");
-                    e.target.reset();
-                  } else {
-                    toast.error("Failed to post route");
-                  }
-                } catch (err) {
-                  toast.error("An error occurred");
-                }
-              }} className="space-y-6">
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Origin (City)</label>
-                  <input required name="origin" type="text" placeholder="e.g. Pune" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm" />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Destination (City)</label>
-                  <input required name="destination" type="text" placeholder="e.g. Mumbai" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm" />
-                </div>
+              <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm mb-8">
+                <form onSubmit={handlePostRoute} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Origin (From)</label>
+                    <input type="text" required value={routeForm.origin} onChange={e => setRouteForm({...routeForm, origin: e.target.value})} placeholder="e.g. Pune" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Destination (To)</label>
+                    <input type="text" required value={routeForm.destination} onChange={e => setRouteForm({...routeForm, destination: e.target.value})} placeholder="e.g. Mumbai" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Date of Return</label>
+                    <input type="date" required value={routeForm.date} onChange={e => setRouteForm({...routeForm, date: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Truck Type Available</label>
+                    <select value={routeForm.truckType} onChange={e => setRouteForm({...routeForm, truckType: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm">
+                      <option value="small">Small (Tata Ace / Mini) - 750kg</option>
+                      <option value="medium">Medium (Pickup 8ft) - 1.5 Ton</option>
+                      <option value="large">Large (Truck 14ft) - 4 Ton</option>
+                    </select>
+                  </div>
+                  <div className="md:col-span-2">
+                    <button type="submit" className="w-full md:w-auto bg-orange-500 text-white px-8 py-3 rounded-xl font-bold shadow-md shadow-orange-200 hover:bg-orange-600 transition-colors">
+                      Publish Route
+                    </button>
+                  </div>
+                </form>
+              </div>
 
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Date of Return</label>
-                  <input required name="date" type="date" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm" />
+              <h3 className="font-bold text-gray-900 text-xl mb-4">Your Active Route Posts</h3>
+              {postedRoutes.length === 0 ? (
+                <div className="text-center py-6 text-gray-500 bg-gray-50 rounded-2xl border border-gray-100 border-dashed">
+                  You haven't posted any return routes yet.
                 </div>
-
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Truck Type</label>
-                  <select required name="truckType" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm">
-                    <option value="Mini Truck (1-2 Ton)">Mini Truck (1-2 Ton)</option>
-                    <option value="Medium Truck (3-5 Ton)">Medium Truck (3-5 Ton)</option>
-                    <option value="Heavy Truck (6-10 Ton)">Heavy Truck (6-10 Ton)</option>
-                    <option value="Trailer (20+ Ton)">Trailer (20+ Ton)</option>
-                  </select>
+              ) : (
+                <div className="grid gap-4">
+                  {postedRoutes.map(route => (
+                    <div key={route._id} className="p-4 rounded-2xl border border-gray-100 flex items-center justify-between">
+                      <div>
+                        <p className="font-bold text-gray-900">{route.origin} → {route.destination}</p>
+                        <p className="text-xs text-gray-500 mt-1">Date: {route.date} · {route.truckType} truck</p>
+                      </div>
+                      <span className={`text-[10px] uppercase font-bold tracking-widest px-2 py-1 rounded-full ${route.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                        {route.status}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-
-                <button type="submit" className="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold shadow-md hover:bg-gray-800 transition-colors w-full">
-                  Post Route Now
-                </button>
-              </form>
+              )}
             </div>
           )}
 

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import connectToDatabase from "@/lib/db";
 import Trip from "@/models/Trip";
-import User from "@/models/User";
 import { verifyToken } from "@/lib/auth";
 
 // GET all trips for the logged-in user
@@ -39,9 +38,9 @@ export async function POST(req) {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     await connectToDatabase();
-    const { pickup, dropoff, truckType, price, distance, driverId } = await req.json();
+    const { pickup, dropoff, truckType, price, distance } = await req.json();
 
-    const tripData = {
+    const trip = await Trip.create({
       userId: user.id,
       pickup,
       dropoff,
@@ -49,13 +48,7 @@ export async function POST(req) {
       price,
       distance,
       status: "pending"
-    };
-
-    if (driverId) {
-      tripData.driverId = driverId;
-    }
-
-    const trip = await Trip.create(tripData);
+    });
 
     return NextResponse.json({ trip }, { status: 201 });
   } catch (error) {

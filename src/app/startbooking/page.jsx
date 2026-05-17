@@ -239,14 +239,24 @@ export default function TruckItApp() {
   const [booked, setBooked] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [mode, setMode] = useState("fresh"); // "fresh" | "empty"
+  
+  // Empty routes logic
+  const [bookingMode, setBookingMode] = useState("fresh"); // "fresh", "empty"
   const [emptyRoutes, setEmptyRoutes] = useState([]);
-  const [loadingEmpty, setLoadingEmpty] = useState(false);
-  const [selectedEmptyRoute, setSelectedEmptyRoute] = useState(null);
+  
   const router = useRouter();
 
+  useEffect(() => {
+    if (bookingMode === "empty") {
+      fetch("/api/route-posts")
+        .then(res => res.json())
+        .then(data => setEmptyRoutes(data.routes || []));
+    }
+  }, [bookingMode]);
+
   const selectedTruckData = TRUCK_TYPES.find((t) => t.id === selectedTruck) ?? TRUCK_TYPES[1];
-  const totalPrice = distanceKm ? Math.round(distanceKm * selectedTruckData.baseRate) : null;
+  const baseTotal = distanceKm ? Math.round(distanceKm * selectedTruckData.baseRate) : null;
+  const totalPrice = bookingMode === "empty" && baseTotal ? Math.round(baseTotal * 0.6) : baseTotal; // 40% discount for empty return
 
   const formatDuration = (min) => {
     const h = Math.floor(min / 60);
@@ -308,10 +318,9 @@ export default function TruckItApp() {
         body: JSON.stringify({
           pickup: from,
           dropoff: to,
-          truckType: mode === "empty" ? selectedEmptyRoute.truckType : selectedTruckData.label,
-          price: mode === "empty" ? Math.round(totalPrice * 0.7) : totalPrice, // 30% discount
-          distance: distanceKm,
-          driverId: mode === "empty" ? selectedEmptyRoute.driverId._id : undefined
+          truckType: selectedTruckData.label,
+          price: totalPrice,
+          distance: distanceKm
         }),
       });
 
@@ -331,52 +340,8 @@ export default function TruckItApp() {
 
   useEffect(() => {
     handleSearch();
-    // Fetch empty routes
-    setLoadingEmpty(true);
-    fetch("/api/empty-routes")
-      .then(res => res.json())
-      .then(data => setEmptyRoutes(data.routes || []))
-      .catch(console.error)
-      .finally(() => setLoadingEmpty(false));
     // eslint-disable-next-line
   }, []);
-
-  // Handle clicking an empty route
-  const handleSelectEmptyRoute = async (route) => {
-    setSelectedEmptyRoute(route);
-    setFrom(route.origin);
-    setTo(route.destination);
-    
-    // Auto-search this route
-    setLoading(true);
-    setError("");
-    setDistanceKm(null);
-    setDurationMin(null);
-    setRouteGeometry(null);
-    setCoordA(null);
-    setCoordB(null);
-    setBooked(false);
-    try {
-      const [a, b] = await Promise.all([geocode(route.origin), geocode(route.destination)]);
-      if (!a || !b) throw new Error("Could not geocode origin or destination");
-      setCoordA(a);
-      setCoordB(b);
-      try {
-        const routeData = await getRouteDistance(a, b);
-        setDistanceKm(routeData.distanceKm);
-        setDurationMin(routeData.durationMin);
-        setRouteGeometry(routeData.geometry);
-      } catch {
-        const d = haversineDistance(a, b);
-        setDistanceKm(d);
-        setDurationMin(Math.round((d / 60) * 60));
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Routing error");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <>
@@ -423,30 +388,25 @@ export default function TruckItApp() {
                   boxShadow: "2px 0 12px rgba(0,0,0,0.04)",
                 }}
               >
-                {/* ── Mode Switcher ── */}
+                {/* ── Book section ── */}
                 <div style={{ padding: "20px 18px 0" }}>
-                  <div className="flex bg-gray-100 rounded-xl p-1 mb-4">
-                    <button
-                      onClick={() => setMode("fresh")}
-                      className={`flex-1 text-sm font-bold py-2 rounded-lg transition-colors ${mode === "fresh" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                  <div style={{ display: "flex", background: "#f1f5f9", borderRadius: "10px", padding: "4px", marginBottom: "16px" }}>
+                    <button 
+                      onClick={() => setBookingMode("fresh")}
+                      style={{ flex: 1, padding: "8px", borderRadius: "6px", fontSize: "13px", fontWeight: 600, background: bookingMode === "fresh" ? "#fff" : "transparent", color: bookingMode === "fresh" ? "#111827" : "#64748b", boxShadow: bookingMode === "fresh" ? "0 1px 3px rgba(0,0,0,0.1)" : "none", border: "none", cursor: "pointer", transition: "all 0.2s" }}
                     >
                       Book Fresh
                     </button>
-                    <button
-                      onClick={() => setMode("empty")}
-                      className={`flex-1 text-sm font-bold py-2 rounded-lg transition-colors ${mode === "empty" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                    <button 
+                      onClick={() => setBookingMode("empty")}
+                      style={{ flex: 1, padding: "8px", borderRadius: "6px", fontSize: "13px", fontWeight: 600, background: bookingMode === "empty" ? "#fff" : "transparent", color: bookingMode === "empty" ? "#15803d" : "#64748b", boxShadow: bookingMode === "empty" ? "0 1px 3px rgba(0,0,0,0.1)" : "none", border: "none", cursor: "pointer", transition: "all 0.2s" }}
                     >
-                      Empty Returns 📉
+                      Empty Return %
                     </button>
                   </div>
-                </div>
 
-                {mode === "fresh" ? (
-                  <>
-                {/* ── Book section ── */}
-                <div style={{ padding: "0 18px" }}>
                   <p style={{ fontWeight: 700, fontSize: "17px", marginBottom: "14px", color: "#111827", letterSpacing: "-0.3px" }}>
-                    Find a Truck
+                    {bookingMode === "fresh" ? "Book a Truck" : "Find Discounted Trucks"}
                   </p>
 
                   {/* Inputs with connector */}
@@ -546,10 +506,10 @@ export default function TruckItApp() {
                         </div>
                         <div style={{ width: "1px", background: "#fed7aa" }} />
                         <div style={{ textAlign: "center" }}>
-                          <div style={{ fontSize: "18px", fontWeight: 700, color: "#7c3aed" }}>
+                          <div style={{ fontSize: "18px", fontWeight: 700, color: bookingMode === "empty" ? "#15803d" : "#7c3aed" }}>
                             ₹{totalPrice?.toLocaleString() ?? "—"}
                           </div>
-                          <div style={{ fontSize: "10.5px", color: "#9ca3af", marginTop: "2px" }}>Est. Fare</div>
+                          <div style={{ fontSize: "10.5px", color: "#9ca3af", marginTop: "2px" }}>{bookingMode === "empty" ? "Discounted Fare" : "Est. Fare"}</div>
                         </div>
                       </div>
                     </motion.div>
@@ -559,24 +519,57 @@ export default function TruckItApp() {
                 {/* Divider */}
                 <div style={{ margin: "16px 18px 0", borderTop: "1px solid #f1f5f9" }} />
 
-                {/* ── Vehicle selector ── */}
-                {mode === "fresh" && (
-                  <div style={{ padding: "14px 18px 0" }}>
+                {/* ── Vehicle / Route selector ── */}
+                <div style={{ padding: "14px 18px 0" }}>
                   <p style={{ fontSize: "11px", fontWeight: 600, color: "#9ca3af", letterSpacing: "0.8px", marginBottom: "10px", textTransform: "uppercase" }}>
-                    Select Vehicle
+                    {bookingMode === "fresh" ? "Select Vehicle" : "Available Empty Trucks"}
                   </p>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "7px" }}>
-                    {TRUCK_TYPES.map((truck) => (
-                      <TruckCard
-                        key={truck.id}
-                        truck={truck}
-                        selected={selectedTruck}
-                        onSelect={setSelectedTruck}
-                        price={distanceKm ? Math.round(distanceKm * truck.baseRate) : null}
-                      />
-                    ))}
-                  </div>
-                )}
+                  
+                  {bookingMode === "empty" && emptyRoutes.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "20px 0", color: "#9ca3af", fontSize: "13px", background: "#f8fafc", borderRadius: "10px", border: "1px dashed #cbd5e1" }}>
+                      No empty return trucks available right now.
+                    </div>
+                  ) : bookingMode === "empty" ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "7px" }}>
+                      {emptyRoutes.map((route) => {
+                        const truckTypeObj = TRUCK_TYPES.find(t => t.id === route.truckType) || TRUCK_TYPES[1];
+                        return (
+                          <div
+                            key={route._id}
+                            onClick={() => {
+                              setFrom(route.origin);
+                              setTo(route.destination);
+                              setSelectedTruck(route.truckType);
+                              setTimeout(() => handleSearch(), 100);
+                            }}
+                            style={{
+                              cursor: "pointer", borderRadius: "12px", padding: "13px 15px", background: "#f0fdf4", border: "1.5px solid #bbf7d0", display: "flex", alignItems: "center", gap: "11px"
+                            }}
+                          >
+                            <div style={{ fontSize: "24px" }}>{truckTypeObj.icon}</div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 600, fontSize: "13px", color: "#166534" }}>{route.origin} → {route.destination}</div>
+                              <div style={{ fontSize: "11px", color: "#15803d", marginTop: "2px" }}>Date: {route.date}</div>
+                            </div>
+                            <div style={{ fontSize: "11px", fontWeight: 700, color: "#16a34a", background: "#dcfce7", padding: "4px 8px", borderRadius: "20px" }}>40% OFF</div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "7px" }}>
+                      {TRUCK_TYPES.map((truck) => (
+                        <TruckCard
+                          key={truck.id}
+                          truck={truck}
+                          selected={selectedTruck}
+                          onSelect={setSelectedTruck}
+                          price={distanceKm ? (bookingMode === "empty" ? Math.round(distanceKm * truck.baseRate * 0.6) : Math.round(distanceKm * truck.baseRate)) : null}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 {/* ── Book button ── */}
                 <div style={{ padding: "16px 18px 22px", marginTop: "auto" }}>
@@ -609,9 +602,7 @@ export default function TruckItApp() {
                         }}
                       >
                         {bookingLoading ? "Booking..." : (distanceKm
-                          ? mode === "empty" 
-                            ? `Book ${selectedEmptyRoute?.truckType || 'Truck'} · ₹${Math.round(totalPrice * 0.7).toLocaleString()} (-30%)`
-                            : `Book ${selectedTruckData.icon} ${selectedTruckData.label} · ₹${totalPrice?.toLocaleString()}`
+                          ? `Book ${selectedTruckData.icon} ${selectedTruckData.label} · ₹${totalPrice?.toLocaleString()}`
                           : "Search a route first")}
                       </motion.button>
                     ) : (
@@ -634,10 +625,10 @@ export default function TruckItApp() {
                           Booking Confirmed!
                         </div>
                         <div style={{ fontSize: "12.5px", color: "#6b7280" }}>
-                          {mode === "empty" ? selectedEmptyRoute?.truckType : `${selectedTruckData.icon} ${selectedTruckData.label}`} · {from} → {to}
+                          {selectedTruckData.icon} {selectedTruckData.label} · {from} → {to}
                         </div>
                         <div style={{ fontSize: "12.5px", color: "#6b7280", marginTop: "2px" }}>
-                          ₹{mode === "empty" ? Math.round(totalPrice * 0.7).toLocaleString() : totalPrice?.toLocaleString()} · {durationMin ? formatDuration(durationMin) : ""}
+                          ₹{totalPrice?.toLocaleString()} · {durationMin ? formatDuration(durationMin) : ""}
                         </div>
                         <button
                           onClick={() => setBooked(false)}
