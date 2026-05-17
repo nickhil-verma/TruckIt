@@ -152,25 +152,68 @@ export default function Navbar() {
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.25 }}
-            className="overflow-hidden border-t border-gray-100 px-5 pb-4"
+            className="overflow-hidden border-t border-gray-100 px-5 pb-5 flex flex-col gap-1"
           >
             {links.map((l) => (
               <Link
                 key={l.name}
                 href={l.href}
-                className="block py-2.5 text-sm text-gray-600 hover:text-orange-500 font-medium"
+                className="block py-2 text-sm text-gray-600 hover:text-orange-500 font-semibold"
                 onClick={() => setMobileOpen(false)}
               >
                 {l.name}
               </Link>
             ))}
-            <Link
-              href="/startbooking"
-              className="mt-3 block rounded-xl bg-orange-500 px-4 py-2.5 text-center text-sm font-semibold text-white"
-              onClick={() => setMobileOpen(false)}
-            >
-              Start Booking →
-            </Link>
+            
+            {mounted && user ? (
+              <div className="mt-3 pt-3 border-t border-gray-100 flex flex-col gap-2">
+                <div className="flex items-center gap-3 px-1 py-1">
+                  <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center font-bold text-orange-600 border border-orange-200">
+                    {(user.name || user.role || "U").substring(0, 2).toUpperCase()}
+                  </div>
+                  <div className="flex-1 overflow-hidden">
+                    <p className="text-sm font-bold text-gray-900 truncate">{user.name}</p>
+                    <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                  </div>
+                </div>
+                <Link
+                  href={user.role === "driver" ? "/driver-dashboard" : "/dashboard"}
+                  className="mt-1 block rounded-xl bg-orange-50 px-4 py-2.5 text-center text-sm font-bold text-orange-600 hover:bg-orange-100 transition-colors"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  {user.role === "driver" ? "Driver Dashboard" : "Dashboard"}
+                </Link>
+                <button
+                  onClick={() => {
+                    setMobileOpen(false);
+                    handleLogout();
+                  }}
+                  className="block w-full rounded-xl bg-red-50 hover:bg-red-100 px-4 py-2.5 text-center text-sm font-bold text-red-600 transition-colors border border-red-100"
+                >
+                  Logout
+                </button>
+              </div>
+            ) : (
+              <div className="mt-3 pt-3 border-t border-gray-100 flex flex-col gap-2">
+                <Link
+                  href="/login"
+                  className="block rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-200 px-4 py-2.5 text-center text-sm font-bold text-gray-700 transition-colors"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  Sign In
+                </Link>
+              </div>
+            )}
+
+            {mounted && (!user || user.role !== "driver") && (
+              <Link
+                href="/startbooking"
+                className="mt-2 block rounded-xl bg-orange-500 hover:bg-orange-600 px-4 py-2.5 text-center text-sm font-bold text-white shadow-md shadow-orange-200 transition-colors"
+                onClick={() => setMobileOpen(false)}
+              >
+                Start Booking →
+              </Link>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

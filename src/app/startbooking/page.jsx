@@ -376,13 +376,10 @@ export default function TruckItApp() {
                 animate={{ x: 0, opacity: 1 }}
                 exit={{ x: -340, opacity: 0 }}
                 transition={{ type: "spring", stiffness: 300, damping: 32 }}
+                className="absolute md:relative z-20 h-[calc(100vh-72px)] md:h-full w-full max-w-[336px] flex flex-col"
                 style={{
-                  width: "336px",
-                  minWidth: "336px",
                   background: "#ffffff",
                   borderRight: "1px solid #f1f5f9",
-                  display: "flex",
-                  flexDirection: "column",
                   overflowY: "auto",
                   overflowX: "hidden",
                   boxShadow: "2px 0 12px rgba(0,0,0,0.04)",
@@ -661,26 +658,7 @@ export default function TruckItApp() {
             {/* Sidebar toggle */}
             <button
               onClick={() => setSidebarOpen((v) => !v)}
-              style={{
-                position: "absolute",
-                top: "50%",
-                left: sidebarOpen ? "-1px" : "12px",
-                transform: "translateY(-50%)",
-                zIndex: 10,
-                width: "24px",
-                height: "52px",
-                borderRadius: sidebarOpen ? "0 8px 8px 0" : "8px",
-                border: "1px solid #e5e7eb",
-                background: "#ffffff",
-                color: "#9ca3af",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "12px",
-                boxShadow: "2px 0 8px rgba(0,0,0,0.06)",
-                transition: "left 0.3s",
-              }}
+              className={`absolute top-1/2 -translate-y-1/2 z-30 w-6 h-13 border border-gray-200 bg-white text-gray-400 cursor-pointer flex items-center justify-center text-xs shadow-md transition-all duration-300 ${sidebarOpen ? 'left-[335px] md:-left-[1px] rounded-r-lg' : 'left-3 rounded-lg'}`}
             >
               {sidebarOpen ? "◂" : "▸"}
             </button>
