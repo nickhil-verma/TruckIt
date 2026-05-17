@@ -188,12 +188,21 @@ export default function Dashboard() {
                       <div className="space-y-4">
                         {ongoingTrips.slice(0, 3).map(trip => (
                           <div key={trip._id} className="flex items-center gap-4 p-3 rounded-2xl hover:bg-gray-50 transition-colors">
-                            <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center text-orange-600 shrink-0">
-                              <Truck size={18} />
+                            <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center text-orange-600 shrink-0 font-bold">
+                              {trip.driverId ? (
+                                <span>{trip.driverId.name ? trip.driverId.name.charAt(0).toUpperCase() : "D"}</span>
+                              ) : (
+                                <Truck size={18} />
+                              )}
                             </div>
                             <div className="flex-1 truncate">
                               <p className="font-bold text-gray-900 text-sm truncate">{trip.pickup} → {trip.dropoff}</p>
-                              <p className="text-xs text-gray-500 mt-0.5">{trip.status.toUpperCase()}</p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className={`text-[9px] uppercase font-black px-1.5 py-0.5 rounded ${trip.status === 'pending' ? 'bg-yellow-100 text-yellow-755 font-bold' : 'bg-green-100 text-green-700 font-bold'}`}>
+                                  {trip.status}
+                                </span>
+                                {trip.driverId && <span className="text-[10px] text-gray-400 font-medium">Driver: {trip.driverId.name}</span>}
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -241,11 +250,22 @@ export default function Dashboard() {
                     <div key={trip._id} className="p-5 rounded-2xl border border-gray-100 hover:border-orange-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-colors">
                       <div>
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="bg-yellow-100 text-yellow-700 text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-full">{trip.status}</span>
+                          <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-full ${trip.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>{trip.status}</span>
                           <span className="text-sm font-bold text-gray-400">ID: {trip._id.slice(-6).toUpperCase()}</span>
                         </div>
                         <h3 className="font-bold text-lg text-gray-900">{trip.pickup} <span className="text-orange-500">→</span> {trip.dropoff}</h3>
                         <p className="text-sm text-gray-500 mt-1">{trip.truckType} · {trip.distance} km</p>
+                        {trip.driverId && (
+                          <div className="flex items-center gap-2.5 mt-3 pt-3 border-t border-gray-50">
+                            <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 font-extrabold text-xs flex items-center justify-center border border-orange-200">
+                              {trip.driverId.name ? trip.driverId.name.charAt(0).toUpperCase() : "D"}
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold text-gray-900">Driver Assigned: {trip.driverId.name}</span>
+                              <span className="text-[10px] text-gray-450 font-medium">★ {trip.driverId.rating || "5.0"} rating · Verified carrier</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <div className="flex gap-3">
                         <button onClick={() => handleOpenChat(trip)} className="px-4 py-2 bg-orange-50 text-orange-600 font-bold rounded-xl text-sm hover:bg-orange-100 transition-colors">
