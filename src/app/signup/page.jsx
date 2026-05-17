@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -15,6 +15,25 @@ export default function Signup() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const storedUser = localStorage.getItem("user");
+    if (token && storedUser) {
+      try {
+        const parsed = JSON.parse(storedUser);
+        toast.success("Already signed in!");
+        if (parsed.role === "driver") {
+          router.push("/driver-dashboard");
+        } else {
+          router.push("/startbooking");
+        }
+      } catch (e) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+      }
+    }
+  }, [router]);
 
   const handleSignup = async (e) => {
     e.preventDefault();
