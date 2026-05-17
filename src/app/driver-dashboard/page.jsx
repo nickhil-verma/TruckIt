@@ -15,6 +15,7 @@ export default function DriverDashboard() {
   // Chat specific state
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
+  const [chatSortBy, setChatSortBy] = useState("date"); // "date" or "name"
   const messagesEndRef = useRef(null);
 
   // User state
@@ -468,85 +469,112 @@ export default function DriverDashboard() {
           )}
 
           {/* TAB: CHAT */}
-          {activeTab === "chat" && (
-            <div className="flex flex-col h-full bg-slate-50">
-              <div className="px-6 py-4 border-b border-gray-100 bg-white flex justify-between items-center z-10 shrink-0">
-                <div>
-                  <h3 className="font-bold text-gray-900 font-serif text-lg">
-                    Customer Chat
-                  </h3>
-                  <div className="flex gap-2 mt-1">
-                    <select 
-                      className="text-xs border border-gray-200 rounded-lg px-2 py-1 outline-none"
-                      onChange={(e) => setSelectedTrip(activeTrips.find(t => t._id === e.target.value))}
-                      value={selectedTrip?._id || ""}
-                    >
-                      <option value="" disabled>Select an active trip</option>
-                      {activeTrips.map(t => (
-                        <option key={t._id} value={t._id}>{t.pickup} → {t.dropoff}</option>
-                      ))}
-                    </select>
+          {activeTab === "chat" && (() => {
+            const sortedChatTrips = [...activeTrips].sort((a, b) => {
+              if (chatSortBy === "name") {
+                const nameA = a.userId?.name || "";
+                const nameB = b.userId?.name || "";
+                return nameA.localeCompare(nameB);
+              } else {
+                return new Date(b.createdAt) - new Date(a.createdAt);
+              }
+            });
+
+            return (
+              <div className="flex flex-col h-full bg-slate-50">
+                <div className="px-6 py-4 border-b border-gray-100 bg-white flex justify-between items-center z-10 shrink-0">
+                  <div>
+                    <h3 className="font-bold text-gray-900 font-serif text-lg">
+                      Customer Chat
+                    </h3>
+                    <div className="flex flex-wrap gap-3 mt-2">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Select customer load</label>
+                        <select 
+                          className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 outline-none bg-white text-gray-750 font-semibold"
+                          onChange={(e) => setSelectedTrip(activeTrips.find(t => t._id === e.target.value))}
+                          value={selectedTrip?._id || ""}
+                        >
+                          <option value="" disabled>Select an active trip</option>
+                          {sortedChatTrips.map(t => (
+                            <option key={t._id} value={t._id}>{t.pickup} → {t.dropoff} ({t.userId?.name || "No User"})</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Sort list by</label>
+                        <select
+                          className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 outline-none bg-white text-gray-755 font-semibold cursor-pointer"
+                          onChange={(e) => setChatSortBy(e.target.value)}
+                          value={chatSortBy}
+                        >
+                          <option value="date">📅 Date (Newest first)</option>
+                          <option value="name">👤 Customer Name</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {selectedTrip ? (
-                <>
-                  <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                    {messages.length === 0 ? (
-                      <div className="text-center text-gray-400 mt-10 text-sm bg-white p-4 rounded-xl border border-gray-100 inline-block mx-auto">
-                        Say hello to your customer and coordinate the pickup!
-                      </div>
-                    ) : (
-                      messages.map(msg => {
-                        const isMe = msg.senderId === user?.id;
-                        const msgTime = msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now";
-                        return (
-                          <div key={msg._id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
-                            <div className={`max-w-xs md:max-w-md px-4 py-2.5 rounded-2xl text-sm flex flex-col ${isMe ? "bg-orange-500 text-white rounded-br-none shadow-orange-200 shadow-md" : "bg-white text-gray-800 border border-gray-200 rounded-bl-none shadow-sm"}`}>
-                              <div>{msg.text}</div>
-                              <div className={`text-[10px] flex items-center gap-1 mt-1 justify-end ${isMe ? "text-orange-100" : "text-gray-400"}`}>
-                                {msgTime}
-                                {isMe && (
-                                  msg.status === "seen" ? <CheckCheck size={12} className="text-blue-200" /> :
-                                  msg.status === "delivered" ? <CheckCheck size={12} /> :
-                                  <Check size={12} />
-                                )}
+                {selectedTrip ? (
+                  <>
+                    <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                      {messages.length === 0 ? (
+                        <div className="text-center text-gray-400 mt-10 text-sm bg-white p-4 rounded-xl border border-gray-100 inline-block mx-auto">
+                          Say hello to your customer and coordinate the pickup!
+                        </div>
+                      ) : (
+                        messages.map(msg => {
+                          const isMe = msg.senderId === user?.id;
+                          const msgTime = msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now";
+                          return (
+                            <div key={msg._id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                              <div className={`max-w-xs md:max-w-md px-4 py-2.5 rounded-2xl text-sm flex flex-col ${isMe ? "bg-orange-500 text-white rounded-br-none shadow-orange-200 shadow-md" : "bg-white text-gray-800 border border-gray-200 rounded-bl-none shadow-sm"}`}>
+                                <div>{msg.text}</div>
+                                <div className={`text-[10px] flex items-center gap-1 mt-1 justify-end ${isMe ? "text-orange-100" : "text-gray-400"}`}>
+                                  {msgTime}
+                                  {isMe && (
+                                    msg.status === "seen" ? <CheckCheck size={12} className="text-blue-200" /> :
+                                    msg.status === "delivered" ? <CheckCheck size={12} /> :
+                                    <Check size={12} />
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        );
-                      })
-                    )}
-                    <div ref={messagesEndRef} />
-                  </div>
+                          );
+                        })
+                      )}
+                      <div ref={messagesEndRef} />
+                    </div>
 
-                  <div className="p-4 bg-white border-t border-gray-100 shrink-0">
-                    <form onSubmit={sendMessage} className="flex gap-3 max-w-4xl mx-auto">
-                      <input
-                        type="text"
-                        value={text}
-                        onChange={e => setText(e.target.value)}
-                        placeholder="Type your message..."
-                        className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
-                      />
-                      <button 
-                        type="submit"
-                        className="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold shadow-md shadow-orange-200 hover:bg-orange-600 transition-colors"
-                      >
-                        Send
-                      </button>
-                    </form>
+                    <div className="p-4 bg-white border-t border-gray-100 shrink-0">
+                      <form onSubmit={sendMessage} className="flex gap-3 max-w-4xl mx-auto">
+                        <input
+                          type="text"
+                          value={text}
+                          onChange={e => setText(e.target.value)}
+                          placeholder="Type your message..."
+                          className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                        />
+                        <button 
+                          type="submit"
+                          className="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold shadow-md shadow-orange-200 hover:bg-orange-600 transition-colors"
+                        >
+                          Send
+                        </button>
+                      </form>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
+                    <MessageSquare size={48} className="mb-4 opacity-50" />
+                    <p>Select an active trip to coordinate with the customer</p>
                   </div>
-                </>
-              ) : (
-                <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
-                  <MessageSquare size={48} className="mb-4 opacity-50" />
-                  <p>Select an active trip to coordinate with the customer</p>
-                </div>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            );
+          })()}
 
         </div>
       </main>

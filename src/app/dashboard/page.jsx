@@ -4,12 +4,14 @@ import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import toast from "react-hot-toast";
 import { LayoutDashboard, Truck, CheckCircle, MessageSquare, CreditCard, Settings, Search, Check, CheckCheck, Clock } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 
 export default function Dashboard() {
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview"); // "overview", "ongoing", "past", "chat", "transactions", "settings"
   const [selectedTrip, setSelectedTrip] = useState(null);
+  const [selectedInvoiceTrip, setSelectedInvoiceTrip] = useState(null);
   
   // Chat specific state
   const [messages, setMessages] = useState([]);
@@ -322,6 +324,7 @@ export default function Dashboard() {
                         <th className="px-6 py-4 font-semibold">Route</th>
                         <th className="px-6 py-4 font-semibold">Status</th>
                         <th className="px-6 py-4 font-semibold text-right">Amount</th>
+                        <th className="px-6 py-4 font-semibold text-center">Invoice</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -330,9 +333,17 @@ export default function Dashboard() {
                           <td className="px-6 py-4 text-gray-600">{new Date(trip.createdAt).toLocaleDateString()}</td>
                           <td className="px-6 py-4 font-medium text-gray-900">{trip.pickup} → {trip.dropoff}</td>
                           <td className="px-6 py-4">
-                            <span className="text-xs font-bold text-gray-500 uppercase">{trip.status}</span>
+                            <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-full ${trip.status === 'completed' ? 'bg-green-100 text-green-700' : trip.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'}`}>{trip.status}</span>
                           </td>
                           <td className="px-6 py-4 text-right font-bold text-gray-900">₹{trip.price}</td>
+                          <td className="px-6 py-4 text-center">
+                            <button
+                              onClick={() => setSelectedInvoiceTrip(trip)}
+                              className="px-3.5 py-1 bg-orange-50 text-orange-600 hover:bg-orange-100 text-xs font-bold rounded-lg transition-colors border border-orange-100 shadow-sm"
+                            >
+                              View Bill 📄
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -456,6 +467,158 @@ export default function Dashboard() {
 
         </div>
       </main>
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          #print-receipt-modal, #print-receipt-modal * {
+            visibility: visible;
+          }
+          #print-receipt-modal {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100% !important;
+            height: auto !important;
+            box-shadow: none !important;
+            border: none !important;
+            background: white !important;
+          }
+        }
+      `}} />
+
+      {/* ── Bill Invoice Printable Modal ── */}
+      <AnimatePresence>
+        {selectedInvoiceTrip && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4 overflow-y-auto"
+            id="print-receipt-modal"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              transition={{ type: "spring", stiffness: 350, damping: 26 }}
+              className="bg-white text-gray-800 rounded-3xl w-full max-w-md shadow-2xl p-6 sm:p-8 relative overflow-hidden font-sans flex flex-col gap-6"
+            >
+              {/* Receipt top orange border highlight */}
+              <div className="absolute top-0 left-0 right-0 h-2 bg-orange-50" style={{ background: "#f97316" }} />
+              
+              {/* Modal header */}
+              <div className="flex justify-between items-start pt-1">
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xl">🚛</span>
+                    <span className="font-extrabold text-gray-900 tracking-tight text-xl font-serif">
+                      TRUCK<span className="text-orange-500">IT</span>
+                    </span>
+                  </div>
+                  <h3 className="text-base font-extrabold text-gray-900 mt-2 font-serif">Booking Invoice</h3>
+                  <p className="text-[10px] text-gray-400 font-mono mt-0.5">
+                    Date: {selectedInvoiceTrip.createdAt ? new Date(selectedInvoiceTrip.createdAt).toLocaleString() : new Date().toLocaleString()}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setSelectedInvoiceTrip(null)}
+                  className="text-gray-400 hover:text-gray-600 font-extrabold text-xl p-1 leading-none rounded-lg hover:bg-slate-100 transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Dotted separator */}
+              <div className="border-t border-dashed border-gray-200" />
+
+              {/* Trip details */}
+              <div className="flex flex-col gap-3">
+                <div className="flex justify-between text-xs sm:text-sm">
+                  <span className="text-gray-400 font-medium">Pickup Location</span>
+                  <span className="text-gray-950 font-bold text-right max-w-[70%] truncate">{selectedInvoiceTrip.pickup}</span>
+                </div>
+                <div className="flex justify-between text-xs sm:text-sm">
+                  <span className="text-gray-400 font-medium">Dropoff Location</span>
+                  <span className="text-gray-950 font-bold text-right max-w-[70%] truncate">{selectedInvoiceTrip.dropoff}</span>
+                </div>
+                <div className="flex justify-between text-xs sm:text-sm">
+                  <span className="text-gray-400 font-medium">Total Distance</span>
+                  <span className="text-gray-950 font-bold">{selectedInvoiceTrip.distance ? selectedInvoiceTrip.distance.toFixed(1) : 0} km</span>
+                </div>
+                <div className="flex justify-between text-xs sm:text-sm">
+                  <span className="text-gray-400 font-medium">Vehicle Selected</span>
+                  <span className="text-gray-950 font-bold">{selectedInvoiceTrip.truckType}</span>
+                </div>
+                <div className="flex justify-between text-xs sm:text-sm items-center">
+                  <span className="text-gray-400 font-medium">Road Permit / E-Way</span>
+                  <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full text-[10px]">GENERATED (ACTIVE)</span>
+                </div>
+              </div>
+
+              {/* Dotted separator */}
+              <div className="border-t border-dashed border-gray-200" />
+
+              {/* Pricing breakdown */}
+              <div className="flex flex-col gap-2.5">
+                <div className="flex justify-between text-xs sm:text-sm">
+                  <span className="text-gray-400">Base Freight Charge</span>
+                  <span className="text-gray-800 font-semibold">₹{Math.round(selectedInvoiceTrip.price * 0.74).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-xs sm:text-sm">
+                  <span className="text-gray-400">Road Permit / Toll Taxes</span>
+                  <span className="text-gray-800 font-semibold">₹{Math.round(selectedInvoiceTrip.price * 0.08).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-xs sm:text-sm">
+                  <span className="text-gray-400">CGST (9%)</span>
+                  <span className="text-gray-800 font-semibold">₹{Math.round(selectedInvoiceTrip.price * 0.09).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-xs sm:text-sm">
+                  <span className="text-gray-400">SGST (9%)</span>
+                  <span className="text-gray-800 font-semibold">₹{Math.round(selectedInvoiceTrip.price * 0.09).toLocaleString()}</span>
+                </div>
+                <div className="border-t border-dashed border-gray-200 my-1" />
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-950 font-black text-sm uppercase tracking-wide">Grand Total Paid</span>
+                  <span className="text-orange-600 font-black text-xl">₹{selectedInvoiceTrip.price?.toLocaleString()}</span>
+                </div>
+              </div>
+
+              {/* Barcode representation */}
+              <div className="flex flex-col items-center mt-1">
+                <div 
+                  className="h-10 w-full max-w-[240px]" 
+                  style={{
+                    background: "repeating-linear-gradient(90deg, #111827, #111827 2px, transparent 2px, transparent 5px, #111827 5px, #111827 8px, transparent 8px, transparent 10px)",
+                    opacity: 0.85
+                  }} 
+                />
+                <span className="text-[10px] text-gray-450 font-mono tracking-[0.25em] mt-1.5">
+                  TRK-{selectedInvoiceTrip._id ? selectedInvoiceTrip._id.slice(-6).toUpperCase() : "849203"}
+                </span>
+              </div>
+
+              {/* Action buttons */}
+              <div className="grid grid-cols-2 gap-4 mt-1">
+                <button
+                  onClick={() => window.print()}
+                  className="py-3 px-4 rounded-xl border border-gray-200 hover:border-gray-300 text-gray-700 font-bold text-sm bg-white hover:bg-slate-50 transition-colors shadow-sm flex items-center justify-center gap-1.5"
+                >
+                  🖨️ Print Bill
+                </button>
+                <button
+                  onClick={() => setSelectedInvoiceTrip(null)}
+                  className="py-3 px-4 rounded-xl text-white font-bold text-sm bg-orange-500 hover:bg-orange-600 transition-colors shadow-md shadow-orange-200 flex items-center justify-center"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
