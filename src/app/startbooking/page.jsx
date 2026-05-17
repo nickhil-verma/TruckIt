@@ -653,7 +653,7 @@ export default function TruckItApp() {
           </AnimatePresence>
 
           {/* ── Map area ── */}
-          <div style={{ flex: 1, position: "relative", padding: "12px" }}>
+          <div style={{ flex: 1, position: "relative", padding: "12px", zIndex: 1 }}>
 
             {/* Sidebar toggle */}
             <button
@@ -664,7 +664,7 @@ export default function TruckItApp() {
             </button>
 
             {/* Map */}
-            <div style={{ width: "100%", height: "100%", borderRadius: "16px", overflow: "hidden", border: "1px solid #e5e7eb", boxShadow: "0 2px 16px rgba(0,0,0,0.06)" }}>
+            <div style={{ width: "100%", height: "100%", borderRadius: "16px", overflow: "hidden", border: "1px solid #e5e7eb", boxShadow: "0 2px 16px rgba(0,0,0,0.06)", position: "relative", zIndex: 1 }}>
               <LeafletMap pointA={coordA} pointB={coordB} routeGeometry={routeGeometry} />
             </div>
 
