@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import connectToDatabase from "@/lib/db";
 import Trip from "@/models/Trip";
+import User from "@/models/User";
 import { verifyToken } from "@/lib/auth";
 
 // GET all trips for the logged-in user

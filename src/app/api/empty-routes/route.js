@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import connectToDatabase from "@/lib/db";
 import EmptyRoute from "@/models/EmptyRoute";
+import User from "@/models/User";
 import { verifyToken } from "@/lib/auth";
 
 export async function GET(req) {
