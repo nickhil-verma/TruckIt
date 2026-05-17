@@ -16,6 +16,8 @@ export default function DriverDashboard() {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const [chatSortBy, setChatSortBy] = useState("date"); // "date" or "name"
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewText, setReviewText] = useState("");
   const messagesEndRef = useRef(null);
 
   // User state
@@ -219,6 +221,45 @@ export default function DriverDashboard() {
     }
   };
 
+  const submitDriverReview = async () => {
+    const token = localStorage.getItem("token");
+    if (!token || !selectedTrip) return;
+
+    try {
+      const res = await fetch("/api/trips", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          tripId: selectedTrip._id,
+          driverRating: reviewRating,
+          driverReview: reviewText
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        toast.success("Client review submitted successfully!");
+        
+        // Update the selected trip object in local state immediately so it renders as reviewed
+        setSelectedTrip(data.trip);
+        
+        // Also update the trip in the global trips state list so it updates across the dashboard tabs
+        setTrips(prevTrips => prevTrips.map(t => t._id === data.trip._id ? data.trip : t));
+        
+        // Reset review state
+        setReviewRating(5);
+        setReviewText("");
+      } else {
+        toast.error("Failed to submit client review");
+      }
+    } catch (err) {
+      toast.error("Error submitting review");
+    }
+  };
+
   const handlePostRoute = async (e) => {
     e.preventDefault();
     if (!routeForm.origin || !routeForm.destination || !routeForm.date) return;
@@ -308,7 +349,19 @@ export default function DriverDashboard() {
                   </div>
                 </div>
 
-                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow md:col-span-2 relative overflow-hidden group">
+                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center">
+                      <Star size={24} className="fill-amber-500 text-amber-500" />
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-gray-500 font-medium text-sm mb-1">Your Driver Rating</p>
+                    <h3 className="text-4xl font-extrabold text-gray-900 font-serif">⭐ {user?.rating || "5.0"}</h3>
+                  </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow relative overflow-hidden group">
                   <div className="absolute -right-6 -top-6 w-32 h-32 bg-green-500/10 rounded-full blur-2xl group-hover:bg-green-500/20 transition-all"></div>
                   <div className="flex justify-between items-start mb-4 relative z-10">
                     <div className="w-12 h-12 bg-green-100 text-green-600 rounded-2xl flex items-center justify-center">
@@ -318,7 +371,7 @@ export default function DriverDashboard() {
                   </div>
                   <div className="relative z-10">
                     <p className="text-gray-500 font-medium text-sm mb-1">Lifetime Profit Generated</p>
-                    <h3 className="text-4xl font-extrabold text-gray-900 font-serif text-green-600">₹{totalProfit.toLocaleString()}</h3>
+                    <h3 className="text-4xl font-extrabold text-gray-900 font-serif text-green-600 font-bold">₹{totalProfit.toLocaleString()}</h3>
                   </div>
                 </div>
               </div>
@@ -452,7 +505,7 @@ export default function DriverDashboard() {
                       <div>
                         <div className="flex items-center gap-2 mb-1">
                           <span className="bg-yellow-100 text-yellow-700 text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-full">New Request</span>
-                          <span className="text-sm font-medium text-gray-500">Customer: {trip.userId?.name || "Anonymous"}</span>
+                          <span className="text-sm font-medium text-gray-500">Customer: {trip.userId?.name || "Anonymous"} (⭐ {trip.userId?.rating || "5.0"})</span>
                         </div>
                         <h3 className="font-bold text-lg text-gray-900">{trip.pickup} <span className="text-orange-500">→</span> {trip.dropoff}</h3>
                         <p className="text-sm text-gray-500 mt-1">{trip.truckType} · {trip.distance} km</p>
@@ -558,7 +611,7 @@ export default function DriverDashboard() {
 
           {/* TAB: CHAT */}
           {activeTab === "chat" && (() => {
-            const sortedChatTrips = [...activeTrips].sort((a, b) => {
+            const sortedChatTrips = [...trips].sort((a, b) => {
               if (chatSortBy === "name") {
                 const nameA = a.userId?.name || "";
                 const nameB = b.userId?.name || "";
@@ -580,12 +633,14 @@ export default function DriverDashboard() {
                         <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Select customer load</label>
                         <select 
                           className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 outline-none bg-white text-gray-750 font-semibold"
-                          onChange={(e) => setSelectedTrip(activeTrips.find(t => t._id === e.target.value))}
+                          onChange={(e) => setSelectedTrip(trips.find(t => t._id === e.target.value))}
                           value={selectedTrip?._id || ""}
                         >
-                          <option value="" disabled>Select an active trip</option>
+                          <option value="" disabled>Select a trip</option>
                           {sortedChatTrips.map(t => (
-                            <option key={t._id} value={t._id}>{t.pickup} → {t.dropoff} ({t.userId?.name || "No User"})</option>
+                            <option key={t._id} value={t._id}>
+                              {t.pickup.split(',')[0]} → {t.dropoff.split(',')[0]} ({t.userId?.name || "No User"}) {t.status === 'completed' ? '✅ Done' : ''}
+                            </option>
                           ))}
                         </select>
                       </div>
@@ -636,28 +691,89 @@ export default function DriverDashboard() {
                       <div ref={messagesEndRef} />
                     </div>
 
-                    <div className="p-4 bg-white border-t border-gray-100 shrink-0">
-                      <form onSubmit={sendMessage} className="flex gap-3 max-w-4xl mx-auto">
-                        <input
-                          type="text"
-                          value={text}
-                          onChange={e => setText(e.target.value)}
-                          placeholder="Type your message..."
-                          className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
-                        />
-                        <button 
-                          type="submit"
-                          className="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold shadow-md shadow-orange-200 hover:bg-orange-600 transition-colors"
-                        >
-                          Send
-                        </button>
-                      </form>
-                    </div>
+                    {/* Chat Input or Closed Chat Feedback Form */}
+                    {selectedTrip.status === "completed" ? (
+                      <div className="p-6 bg-white border-t border-gray-100 shrink-0 flex flex-col gap-4">
+                        <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-4 text-center max-w-xl mx-auto w-full">
+                          <span className="text-xl">✅</span>
+                          <h4 className="font-bold text-gray-900 text-sm mt-1">This job is completed!</h4>
+                          <p className="text-xs text-gray-500 mt-0.5 font-medium">The chat session has ended. Share your feedback on the client/receiver below.</p>
+                        </div>
+
+                        {/* Review / Feedback Section */}
+                        {selectedTrip.driverRating !== undefined && selectedTrip.driverRating !== null ? (
+                          <div className="text-center max-w-xl mx-auto w-full p-5 bg-emerald-50/50 border border-emerald-100 rounded-2xl">
+                            <p className="text-xs font-black text-emerald-850">🎉 Thank you! Your feedback on the customer has been recorded successfully.</p>
+                            <div className="flex justify-center items-center gap-1.5 mt-2">
+                              <span className="text-xs font-semibold text-gray-600">Your Rating:</span>
+                              <span className="text-sm font-black text-amber-500">{"★".repeat(selectedTrip.driverRating)}{"☆".repeat(5 - selectedTrip.driverRating)}</span>
+                              <span className="text-xs font-bold text-gray-500">({selectedTrip.driverRating} / 5)</span>
+                            </div>
+                            {selectedTrip.driverReview && (
+                              <p className="text-xs text-gray-500 italic mt-3 bg-white/70 py-2 px-3 rounded-xl border border-emerald-100/50">"{selectedTrip.driverReview}"</p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="max-w-xl mx-auto w-full bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+                            <h5 className="font-bold text-gray-800 text-xs uppercase tracking-wide mb-3">Rate your Customer ({selectedTrip.userId?.name || "Customer"})</h5>
+                            
+                            <div className="flex gap-2.5 mb-4">
+                              {[1, 2, 3, 4, 5].map((stars) => (
+                                <button
+                                  key={stars}
+                                  type="button"
+                                  onClick={() => setReviewRating(stars)}
+                                  className={`text-2xl transition-all ${
+                                    reviewRating >= stars ? "text-amber-500 scale-110" : "text-gray-200 hover:text-amber-400"
+                                  }`}
+                                >
+                                  ★
+                              </button>
+                              ))}
+                            </div>
+
+                            <textarea
+                              value={reviewText}
+                              onChange={(e) => setReviewText(e.target.value)}
+                              placeholder="Write a brief review about the pickup process readiness, weight specifications correctness, and payments speed..."
+                              rows={3}
+                              className="w-full p-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-xs mb-3 resize-none font-medium"
+                            />
+
+                            <button
+                              onClick={submitDriverReview}
+                              className="w-full bg-orange-500 text-white font-bold py-2.5 rounded-xl text-xs hover:bg-orange-600 transition-colors shadow-md shadow-orange-100"
+                            >
+                              Submit Review & Rating
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      /* Chat Input */
+                      <div className="p-4 bg-white border-t border-gray-100 shrink-0">
+                        <form onSubmit={sendMessage} className="flex gap-3 max-w-4xl mx-auto">
+                          <input
+                            type="text"
+                            value={text}
+                            onChange={e => setText(e.target.value)}
+                            placeholder="Type your message..."
+                            className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                          />
+                          <button 
+                            type="submit"
+                            className="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold shadow-md shadow-orange-200 hover:bg-orange-600 transition-colors"
+                          >
+                            Send
+                          </button>
+                        </form>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
                     <MessageSquare size={48} className="mb-4 opacity-50" />
-                    <p>Select an active trip to coordinate with the customer</p>
+                    <p>Select an active or completed trip to coordinate or submit feedback</p>
                   </div>
                 )}
               </div>

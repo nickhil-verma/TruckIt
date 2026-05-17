@@ -16,6 +16,8 @@ export default function Dashboard() {
   // Chat specific state
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewText, setReviewText] = useState("");
   const messagesEndRef = useRef(null);
 
   // User state
@@ -183,6 +185,45 @@ export default function Dashboard() {
       loadMessages(selectedTrip._id);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const submitCustomerReview = async () => {
+    const token = localStorage.getItem("token");
+    if (!token || !selectedTrip) return;
+
+    try {
+      const res = await fetch("/api/trips", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          tripId: selectedTrip._id,
+          customerRating: reviewRating,
+          customerReview: reviewText
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        toast.success("Review submitted! Rating updated in real-time.");
+        
+        // Update the selected trip object in local state immediately so it renders as reviewed
+        setSelectedTrip(data.trip);
+        
+        // Also update the trip in the global trips state list so it updates across the dashboard tabs
+        setTrips(prevTrips => prevTrips.map(t => t._id === data.trip._id ? data.trip : t));
+        
+        // Reset review state
+        setReviewRating(5);
+        setReviewText("");
+      } else {
+        toast.error("Failed to submit review");
+      }
+    } catch (err) {
+      toast.error("Error submitting review");
     }
   };
 
@@ -525,24 +566,84 @@ export default function Dashboard() {
                     <div ref={messagesEndRef} />
                   </div>
 
-                  {/* Chat Input */}
-                  <div className="p-4 bg-white border-t border-gray-100 shrink-0">
-                    <form onSubmit={sendMessage} className="flex gap-3 max-w-4xl mx-auto">
-                      <input
-                        type="text"
-                        value={text}
-                        onChange={e => setText(e.target.value)}
-                        placeholder="Type your message..."
-                        className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
-                      />
-                      <button 
-                        type="submit"
-                        className="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold shadow-md shadow-orange-200 hover:bg-orange-600 transition-colors"
-                      >
-                        Send
-                      </button>
-                    </form>
-                  </div>
+                  {/* Chat Input or Closed Chat Feedback Form */}
+                  {selectedTrip.status === "completed" ? (
+                    <div className="p-6 bg-white border-t border-gray-100 shrink-0 flex flex-col gap-4">
+                      <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-4 text-center max-w-xl mx-auto w-full">
+                        <span className="text-xl">✅</span>
+                        <h4 className="font-bold text-gray-900 text-sm mt-1">This trip is completed!</h4>
+                        <p className="text-xs text-gray-500 mt-0.5 font-medium">The chat session has ended. Share your valuable experience below.</p>
+                      </div>
+
+                      {/* Review / Feedback Section */}
+                      {selectedTrip.customerRating !== undefined && selectedTrip.customerRating !== null ? (
+                        <div className="text-center max-w-xl mx-auto w-full p-5 bg-emerald-50/50 border border-emerald-100 rounded-2xl">
+                          <p className="text-xs font-black text-emerald-850">🎉 Thank you! Your feedback has been recorded successfully.</p>
+                          <div className="flex justify-center items-center gap-1.5 mt-2">
+                            <span className="text-xs font-semibold text-gray-600">Your Rating:</span>
+                            <span className="text-sm font-black text-amber-500">{"★".repeat(selectedTrip.customerRating)}{"☆".repeat(5 - selectedTrip.customerRating)}</span>
+                            <span className="text-xs font-bold text-gray-500">({selectedTrip.customerRating} / 5)</span>
+                          </div>
+                          {selectedTrip.customerReview && (
+                            <p className="text-xs text-gray-500 italic mt-3 bg-white/70 py-2 px-3 rounded-xl border border-emerald-100/50">"{selectedTrip.customerReview}"</p>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="max-w-xl mx-auto w-full bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+                          <h5 className="font-bold text-gray-800 text-xs uppercase tracking-wide mb-3">Rate your Driver ({selectedTrip.driverId?.name || "Driver"})</h5>
+                          
+                          <div className="flex gap-2.5 mb-4">
+                            {[1, 2, 3, 4, 5].map((stars) => (
+                              <button
+                                key={stars}
+                                type="button"
+                                onClick={() => setReviewRating(stars)}
+                                className={`text-2xl transition-all ${
+                                  reviewRating >= stars ? "text-amber-500 scale-110" : "text-gray-200 hover:text-amber-400"
+                                }`}
+                              >
+                                ★
+                              </button>
+                            ))}
+                          </div>
+
+                          <textarea
+                            value={reviewText}
+                            onChange={(e) => setReviewText(e.target.value)}
+                            placeholder="Write a brief review about the driving safety, vehicle condition, and delivery speed..."
+                            rows={3}
+                            className="w-full p-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-xs mb-3 resize-none font-medium"
+                          />
+
+                          <button
+                            onClick={submitCustomerReview}
+                            className="w-full bg-orange-500 text-white font-bold py-2.5 rounded-xl text-xs hover:bg-orange-600 transition-colors shadow-md shadow-orange-100"
+                          >
+                            Submit Review & Rating
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* Chat Input */
+                    <div className="p-4 bg-white border-t border-gray-100 shrink-0">
+                      <form onSubmit={sendMessage} className="flex gap-3 max-w-4xl mx-auto">
+                        <input
+                          type="text"
+                          value={text}
+                          onChange={e => setText(e.target.value)}
+                          placeholder="Type your message..."
+                          className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                        />
+                        <button 
+                          type="submit"
+                          className="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold shadow-md shadow-orange-200 hover:bg-orange-600 transition-colors"
+                        >
+                          Send
+                        </button>
+                      </form>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center text-gray-400">

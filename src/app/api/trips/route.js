@@ -57,25 +57,56 @@ export async function POST(req) {
   }
 }
 
-// PUT to update trip status
+// PUT to update trip status or submit reviews
 export async function PUT(req) {
   try {
     const user = verifyToken(req);
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     await connectToDatabase();
-    const { tripId, status } = await req.json();
+    const { tripId, status, customerReview, customerRating, driverReview, driverRating } = await req.json();
 
     const trip = await Trip.findById(tripId);
     if (!trip) return NextResponse.json({ error: "Trip not found" }, { status: 404 });
 
-    if (user.role === "driver") {
-      trip.driverId = user.id;
+    // Handle standard status updates
+    if (status) {
+      if (user.role === "driver") {
+        trip.driverId = user.id;
+      }
+      trip.status = status;
     }
-    trip.status = status;
+
+    // Handle Customer review of Driver
+    if (customerRating !== undefined) {
+      trip.customerReview = customerReview;
+      trip.customerRating = Number(customerRating);
+
+      // Re-calculate and update driver's average rating in User model
+      if (trip.driverId) {
+        const driverTrips = await Trip.find({ driverId: trip.driverId, customerRating: { $exists: true, $ne: null } });
+        const totalRating = driverTrips.reduce((acc, curr) => acc + (curr.customerRating || 0), 0) + Number(customerRating);
+        const count = driverTrips.length + 1;
+        const avgRating = Number((totalRating / count).toFixed(1));
+
+        await User.findByIdAndUpdate(trip.driverId, { rating: avgRating });
+      }
+    }
+
+    // Handle Driver review of Customer
+    if (driverRating !== undefined) {
+      trip.driverReview = driverReview;
+      trip.driverRating = Number(driverRating);
+    }
+
     await trip.save();
 
-    return NextResponse.json({ trip }, { status: 200 });
+    // Populate user and driver names so dashboard can display updated rating immediately
+    const updatedTrip = await Trip.findById(tripId)
+      .populate('userId', 'name rating')
+      .populate('driverId', 'name rating avatar');
+
+    return NextResponse.json({ trip: updatedTrip }, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

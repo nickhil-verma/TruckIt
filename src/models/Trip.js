@@ -9,6 +9,10 @@ const TripSchema = new mongoose.Schema({
   price: { type: Number, required: true },
   distance: { type: Number },
   status: { type: String, enum: ["pending", "accepted", "running", "completed", "cancelled"], default: "pending" },
+  customerReview: { type: String },
+  customerRating: { type: Number },
+  driverReview: { type: String },
+  driverRating: { type: Number },
 }, { timestamps: true });
 
 export default mongoose.models.Trip || mongoose.model("Trip", TripSchema);
