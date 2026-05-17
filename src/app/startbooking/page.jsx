@@ -239,6 +239,7 @@ export default function TruckItApp() {
   const [booked, setBooked] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showReceipt, setShowReceipt] = useState(false);
   
   // Empty routes logic
   const [bookingMode, setBookingMode] = useState("fresh"); // "fresh", "empty"
@@ -330,6 +331,7 @@ export default function TruckItApp() {
       }
 
       setBooked(true);
+      setShowReceipt(true);
       toast.success("Truck booked successfully!");
     } catch (err) {
       toast.error(err.message);
@@ -360,6 +362,24 @@ export default function TruckItApp() {
         .leaflet-control-attribution { display: none !important; }
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.6;transform:scale(0.85)} }
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          #print-receipt-modal, #print-receipt-modal * {
+            visibility: visible;
+          }
+          #print-receipt-modal {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100% !important;
+            height: auto !important;
+            box-shadow: none !important;
+            border: none !important;
+            background: white !important;
+          }
+        }
       `}} />
 
       <div className="bg-slate-50 h-screen overflow-hidden flex flex-col font-sans text-gray-900">
@@ -738,6 +758,137 @@ export default function TruckItApp() {
           </div>
         </div>
       </div>
+
+      {/* ── Bill Invoice Printable Modal ── */}
+      <AnimatePresence>
+        {showReceipt && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4 overflow-y-auto"
+            id="print-receipt-modal"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              transition={{ type: "spring", stiffness: 350, damping: 26 }}
+              className="bg-white text-gray-800 rounded-3xl w-full max-w-md shadow-2xl p-6 sm:p-8 relative overflow-hidden font-sans flex flex-col gap-6"
+            >
+              {/* Receipt top orange border highlight */}
+              <div className="absolute top-0 left-0 right-0 h-2 bg-orange-500" />
+              
+              {/* Modal header */}
+              <div className="flex justify-between items-start pt-1">
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xl">🚛</span>
+                    <span className="font-extrabold text-gray-900 tracking-tight text-xl font-serif">
+                      TRUCK<span className="text-orange-500">IT</span>
+                    </span>
+                  </div>
+                  <h3 className="text-base font-extrabold text-gray-900 mt-2 font-serif">Booking Invoice</h3>
+                  <p className="text-[10px] text-gray-400 font-mono mt-0.5">
+                    Date: {new Date().toLocaleString()}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowReceipt(false)}
+                  className="text-gray-400 hover:text-gray-600 font-extrabold text-xl p-1 leading-none rounded-lg hover:bg-slate-100 transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Dotted separator */}
+              <div className="border-t border-dashed border-gray-200" />
+
+              {/* Trip details */}
+              <div className="flex flex-col gap-3">
+                <div className="flex justify-between text-xs sm:text-sm">
+                  <span className="text-gray-400 font-medium">Pickup Location</span>
+                  <span className="text-gray-950 font-bold text-right max-w-[70%] truncate">{from}</span>
+                </div>
+                <div className="flex justify-between text-xs sm:text-sm">
+                  <span className="text-gray-400 font-medium">Dropoff Location</span>
+                  <span className="text-gray-950 font-bold text-right max-w-[70%] truncate">{to}</span>
+                </div>
+                <div className="flex justify-between text-xs sm:text-sm">
+                  <span className="text-gray-400 font-medium">Total Distance</span>
+                  <span className="text-gray-950 font-bold">{distanceKm ? distanceKm.toFixed(1) : 0} km</span>
+                </div>
+                <div className="flex justify-between text-xs sm:text-sm">
+                  <span className="text-gray-400 font-medium">Vehicle Selected</span>
+                  <span className="text-gray-950 font-bold">{selectedTruckData.icon} {selectedTruckData.label}</span>
+                </div>
+                <div className="flex justify-between text-xs sm:text-sm items-center">
+                  <span className="text-gray-400 font-medium">Road Permit / E-Way</span>
+                  <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full text-[10px]">GENERATED (ACTIVE)</span>
+                </div>
+              </div>
+
+              {/* Dotted separator */}
+              <div className="border-t border-dashed border-gray-200" />
+
+              {/* Pricing breakdown */}
+              <div className="flex flex-col gap-2.5">
+                <div className="flex justify-between text-xs sm:text-sm">
+                  <span className="text-gray-400">Base Freight Charge</span>
+                  <span className="text-gray-800 font-semibold">₹{Math.round(totalPrice * 0.74).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-xs sm:text-sm">
+                  <span className="text-gray-400">Road Permit / Toll Taxes</span>
+                  <span className="text-gray-800 font-semibold">₹{Math.round(totalPrice * 0.08).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-xs sm:text-sm">
+                  <span className="text-gray-400">CGST (9%)</span>
+                  <span className="text-gray-800 font-semibold">₹{Math.round(totalPrice * 0.09).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-xs sm:text-sm">
+                  <span className="text-gray-400">SGST (9%)</span>
+                  <span className="text-gray-800 font-semibold">₹{Math.round(totalPrice * 0.09).toLocaleString()}</span>
+                </div>
+                <div className="border-t border-dashed border-gray-200 my-1" />
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-950 font-black text-sm uppercase tracking-wide">Grand Total Paid</span>
+                  <span className="text-orange-600 font-black text-xl">₹{totalPrice?.toLocaleString()}</span>
+                </div>
+              </div>
+
+              {/* Barcode representation */}
+              <div className="flex flex-col items-center mt-1">
+                <div 
+                  className="h-10 w-full max-w-[240px]" 
+                  style={{
+                    background: "repeating-linear-gradient(90deg, #111827, #111827 2px, transparent 2px, transparent 5px, #111827 5px, #111827 8px, transparent 8px, transparent 10px)",
+                    opacity: 0.85
+                  }} 
+                />
+                <span className="text-[10px] text-gray-450 font-mono tracking-[0.25em] mt-1.5">
+                  TRK-{Math.floor(100000 + Math.random() * 900000)}
+                </span>
+              </div>
+
+              {/* Action buttons */}
+              <div className="grid grid-cols-2 gap-4 mt-1">
+                <button
+                  onClick={() => window.print()}
+                  className="py-3 px-4 rounded-xl border border-gray-200 hover:border-gray-300 text-gray-700 font-bold text-sm bg-white hover:bg-slate-50 transition-colors shadow-sm flex items-center justify-center gap-1.5"
+                >
+                  🖨️ Print Bill
+                </button>
+                <button
+                  onClick={() => router.push("/dashboard")}
+                  className="py-3 px-4 rounded-xl text-white font-bold text-sm bg-orange-500 hover:bg-orange-600 transition-colors shadow-md shadow-orange-200 flex items-center justify-center gap-1.5"
+                >
+                  📍 Track Live
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }
