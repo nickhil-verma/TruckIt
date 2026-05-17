@@ -29,7 +29,7 @@ export default function RootLayout({ children }) {
       lang="en"
       className={`${dmSans.variable} ${instrumentSerif.variable} ${dancingScript.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans">
+      <body className="min-h-full flex flex-col font-sans" suppressHydrationWarning>
         <Toaster position="top-center" />
         {children}
       </body>

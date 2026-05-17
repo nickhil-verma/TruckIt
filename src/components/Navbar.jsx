@@ -125,7 +125,7 @@ export default function Navbar() {
           ) : (
             <div className="w-24 h-8"></div>
           )}
-          {(!user || user.role !== "driver") && (
+          {(!mounted || !user || user.role !== "driver") && (
             <Link
               href="/startbooking"
               className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-orange-200 hover:bg-orange-600 transition-colors duration-200"

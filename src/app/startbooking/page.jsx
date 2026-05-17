@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import Navbar from "@/components/Navbar";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 
 // ─── Geo helpers ──────────────────────────────────────────────────────────────
 async function geocode(query) {
@@ -47,101 +48,18 @@ const TRUCK_TYPES = [
 ];
 
 // ─── Map component ────────────────────────────────────────────────────────────
-function LeafletMap({ pointA, pointB, routeGeometry }) {
-  const mapRef = useRef(null);
-  const mapInstanceRef = useRef(null);
-  const layersRef = useRef([]);
 
-  useEffect(() => {
-    const loadLeaflet = async () => {
-      if (typeof window === "undefined") return;
-      if (!window.L) {
-        await new Promise((resolve) => {
-          const link = document.createElement("link");
-          link.rel = "stylesheet";
-          link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-          document.head.appendChild(link);
-          const script = document.createElement("script");
-          script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-          script.onload = resolve;
-          document.head.appendChild(script);
-        });
-      }
-      if (!mapInstanceRef.current && mapRef.current) {
-        const L = window.L;
-        const map = L.map(mapRef.current, {
-          center: [20.5937, 78.9629],
-          zoom: 5,
-          zoomControl: false,
-        });
-        L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-          attribution: "©OSM ©Carto",
-          maxZoom: 19,
-        }).addTo(map);
-        L.control.zoom({ position: "bottomright" }).addTo(map);
-        mapInstanceRef.current = map;
-      }
-    };
-    loadLeaflet();
-  }, []);
-
-  useEffect(() => {
-    const L = window.L;
-    const map = mapInstanceRef.current;
-    if (!L || !map) return;
-    layersRef.current.forEach((l) => map.removeLayer(l));
-    layersRef.current = [];
-    if (!pointA || !pointB) return;
-
-    const iconA = L.divIcon({
-      className: "",
-      html: `<div style="width:14px;height:14px;background:#f97316;border:2.5px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(249,115,22,0.4)"></div>`,
-      iconAnchor: [7, 7],
-    });
-    const iconB = L.divIcon({
-      className: "",
-      html: `<div style="width:14px;height:14px;background:#16a34a;border:2.5px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(22,163,74,0.4)"></div>`,
-      iconAnchor: [7, 7],
-    });
-
-    const mA = L.marker([pointA.lat, pointA.lon], { icon: iconA }).addTo(map);
-    const mB = L.marker([pointB.lat, pointB.lon], { icon: iconB }).addTo(map);
-    layersRef.current.push(mA, mB);
-
-    if (routeGeometry && routeGeometry.length > 0) {
-      const polyline = L.polyline(routeGeometry, {
-        color: "#f97316",
-        weight: 5,
-        opacity: 0.85,
-      }).addTo(map);
-      layersRef.current.push(polyline);
-      const bounds = polyline.getBounds();
-      if (bounds.isValid()) {
-        map.invalidateSize();
-        map.fitBounds(bounds, { padding: [50, 50] });
-      }
-    } else {
-      const bounds = L.latLngBounds([pointA.lat, pointA.lon], [pointB.lat, pointB.lon]);
-      if (bounds.isValid()) {
-        map.invalidateSize();
-        map.fitBounds(bounds, { padding: [60, 60] });
-      }
-    }
-  }, [pointA, pointB, routeGeometry]);
-
-  return (
-    <div
-      ref={mapRef}
-      style={{
-        width: "100%",
-        height: "100%",
-        borderRadius: "16px",
-        overflow: "hidden",
-        background: "#f1f5f9",
-      }}
-    />
-  );
-}
+const LeafletMap = dynamic(() => import("@/components/LeafletMapComponent"), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-full min-h-[350px] bg-slate-50 border border-slate-100 rounded-3xl flex items-center justify-center">
+      <div className="flex flex-col items-center gap-2">
+        <span className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></span>
+        <span className="text-xs font-semibold text-slate-500">Loading OpenStreetMap Engine...</span>
+      </div>
+    </div>
+  )
+});
 
 // ─── Truck Card ───────────────────────────────────────────────────────────────
 function TruckCard({ truck, selected, onSelect, price }) {
