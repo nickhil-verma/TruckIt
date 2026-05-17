@@ -1,6 +1,9 @@
 "use client"
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import Navbar from "@/components/Navbar";
+import toast from "react-hot-toast";
+import { useRouter } from "next/navigation";
 
 // ─── Geo helpers ──────────────────────────────────────────────────────────────
 async function geocode(query) {
@@ -38,13 +41,12 @@ async function getRouteDistance(a, b) {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TRUCK_TYPES = [
-  { id: "mini",   label: "Mini",   sub: "1 Ton · City runs",   baseRate: 12, icon: "🛻", rating: 4.8, color: "#38bdf8" },
+  { id: "mini",   label: "Mini",   sub: "1 Ton · City runs",   baseRate: 12, icon: "🛻", rating: 4.8, color: "#0ea5e9" },
   { id: "medium", label: "Medium", sub: "3 Ton · Intercity",   baseRate: 18, icon: "🚚", rating: 4.7, color: "#f97316" },
-  { id: "heavy",  label: "Heavy",  sub: "10 Ton · Bulk cargo", baseRate: 28, icon: "🚛", rating: 4.9, color: "#a78bfa" },
+  { id: "heavy",  label: "Heavy",  sub: "10 Ton · Bulk cargo", baseRate: 28, icon: "🚛", rating: 4.9, color: "#8b5cf6" },
 ];
 
-// ─── Map component (lazy-loads Leaflet) ───────────────────────────────────────
-// ─── Map component (2D White Theme) ───────────────────────────────────────
+// ─── Map component ────────────────────────────────────────────────────────────
 function LeafletMap({ pointA, pointB, routeGeometry }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -59,14 +61,12 @@ function LeafletMap({ pointA, pointB, routeGeometry }) {
           link.rel = "stylesheet";
           link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
           document.head.appendChild(link);
-
           const script = document.createElement("script");
           script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
           script.onload = resolve;
           document.head.appendChild(script);
         });
       }
-
       if (!mapInstanceRef.current && mapRef.current) {
         const L = window.L;
         const map = L.map(mapRef.current, {
@@ -74,13 +74,10 @@ function LeafletMap({ pointA, pointB, routeGeometry }) {
           zoom: 5,
           zoomControl: false,
         });
-
-        // UPDATED: Using CartoDB Positron for a clean, 2D white/light appearance
         L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
           attribution: "©OSM ©Carto",
           maxZoom: 19,
         }).addTo(map);
-
         L.control.zoom({ position: "bottomright" }).addTo(map);
         mapInstanceRef.current = map;
       }
@@ -92,21 +89,18 @@ function LeafletMap({ pointA, pointB, routeGeometry }) {
     const L = window.L;
     const map = mapInstanceRef.current;
     if (!L || !map) return;
-
     layersRef.current.forEach((l) => map.removeLayer(l));
     layersRef.current = [];
-
     if (!pointA || !pointB) return;
 
-    // Adjusted icons for better contrast on a white map
     const iconA = L.divIcon({
       className: "",
-      html: `<div style="width:14px;height:14px;background:#f97316;border:2px solid #fff;border-radius:50%;box-shadow:0 0 8px rgba(0,0,0,0.2)"></div>`,
+      html: `<div style="width:14px;height:14px;background:#f97316;border:2.5px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(249,115,22,0.4)"></div>`,
       iconAnchor: [7, 7],
     });
     const iconB = L.divIcon({
       className: "",
-      html: `<div style="width:14px;height:14px;background:#16a34a;border:2px solid #fff;border-radius:50%;box-shadow:0 0 8px rgba(0,0,0,0.2)"></div>`,
+      html: `<div style="width:14px;height:14px;background:#16a34a;border:2.5px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(22,163,74,0.4)"></div>`,
       iconAnchor: [7, 7],
     });
 
@@ -114,19 +108,24 @@ function LeafletMap({ pointA, pointB, routeGeometry }) {
     const mB = L.marker([pointB.lat, pointB.lon], { icon: iconB }).addTo(map);
     layersRef.current.push(mA, mB);
 
-    if (routeGeometry) {
+    if (routeGeometry && routeGeometry.length > 0) {
       const polyline = L.polyline(routeGeometry, {
-        color: "#f97316", // Keeping the brand orange for the route
+        color: "#f97316",
         weight: 5,
-        opacity: 0.8,
+        opacity: 0.85,
       }).addTo(map);
       layersRef.current.push(polyline);
-      map.fitBounds(polyline.getBounds(), { padding: [50, 50] });
+      const bounds = polyline.getBounds();
+      if (bounds.isValid()) {
+        map.invalidateSize();
+        map.fitBounds(bounds, { padding: [50, 50] });
+      }
     } else {
-      map.fitBounds(
-        L.latLngBounds([pointA.lat, pointA.lon], [pointB.lat, pointB.lon]),
-        { padding: [60, 60] }
-      );
+      const bounds = L.latLngBounds([pointA.lat, pointA.lon], [pointB.lat, pointB.lon]);
+      if (bounds.isValid()) {
+        map.invalidateSize();
+        map.fitBounds(bounds, { padding: [60, 60] });
+      }
     }
   }, [pointA, pointB, routeGeometry]);
 
@@ -138,7 +137,7 @@ function LeafletMap({ pointA, pointB, routeGeometry }) {
         height: "100%",
         borderRadius: "16px",
         overflow: "hidden",
-        background: "#f8f9fa", // Light background while loading
+        background: "#f1f5f9",
       }}
     />
   );
@@ -149,91 +148,77 @@ function TruckCard({ truck, selected, onSelect, price }) {
   const isSelected = selected === truck.id;
   return (
     <motion.div
-      whileHover={{ y: -2 }}
-      whileTap={{ scale: 0.98 }}
+      whileHover={{ y: -1 }}
+      whileTap={{ scale: 0.985 }}
       onClick={() => onSelect(truck.id)}
       style={{
         cursor: "pointer",
-        borderRadius: "14px",
-        padding: "14px 16px",
-        background: isSelected
-          ? `linear-gradient(135deg, ${truck.color}22, ${truck.color}10)`
-          : "rgba(255,255,255,0.04)",
-        border: `1.5px solid ${isSelected ? truck.color : "rgba(255,255,255,0.09)"}`,
+        borderRadius: "12px",
+        padding: "13px 15px",
+        background: isSelected ? `${truck.color}0d` : "#fff",
+        border: `1.5px solid ${isSelected ? truck.color : "#e5e7eb"}`,
         display: "flex",
         alignItems: "center",
-        gap: "12px",
-        transition: "border-color 0.2s, background 0.2s",
+        gap: "11px",
+        transition: "border-color 0.2s, background 0.2s, box-shadow 0.2s",
+        boxShadow: isSelected ? `0 2px 12px ${truck.color}22` : "0 1px 3px rgba(0,0,0,0.04)",
         position: "relative",
         overflow: "hidden",
       }}
     >
-      {isSelected && (
-        <motion.div
-          layoutId="truckGlow"
-          style={{
-            position: "absolute",
-            inset: 0,
-            background: `radial-gradient(circle at 20% 50%, ${truck.color}18, transparent 70%)`,
-            pointerEvents: "none",
-          }}
-        />
-      )}
-      <div style={{ fontSize: "28px", lineHeight: 1 }}>{truck.icon}</div>
+      <div style={{ fontSize: "26px", lineHeight: 1 }}>{truck.icon}</div>
       <div style={{ flex: 1 }}>
-        <div style={{ fontWeight: 700, fontSize: "15px", color: "#f1f5f9", fontFamily: "Syne, sans-serif" }}>
-          {truck.label}
-        </div>
-        <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.45)", marginTop: "2px" }}>{truck.sub}</div>
+        <div style={{ fontWeight: 600, fontSize: "14px", color: "#111827" }}>{truck.label}</div>
+        <div style={{ fontSize: "11.5px", color: "#9ca3af", marginTop: "1px" }}>{truck.sub}</div>
       </div>
       <div style={{ textAlign: "right" }}>
-        <div style={{ fontWeight: 700, fontSize: "15px", color: isSelected ? truck.color : "#f1f5f9" }}>
+        <div style={{ fontWeight: 700, fontSize: "14px", color: isSelected ? truck.color : "#374151" }}>
           {price != null ? `₹${price.toLocaleString()}` : `₹${truck.baseRate}/km`}
         </div>
-        <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.4)", marginTop: "2px" }}>
-          ⭐ {truck.rating}
-        </div>
+        <div style={{ fontSize: "11px", color: "#d1d5db", marginTop: "1px" }}>⭐ {truck.rating}</div>
       </div>
     </motion.div>
   );
 }
 
 // ─── Input Field ──────────────────────────────────────────────────────────────
-function RouteInput({ label, value, onChange, dotColor, placeholder }) {
+function RouteInput({ value, onChange, dotColor, placeholder }) {
+  const [focused, setFocused] = useState(false);
   return (
     <div style={{ position: "relative" }}>
       <div
         style={{
           position: "absolute",
-          left: "14px",
+          left: "13px",
           top: "50%",
           transform: "translateY(-50%)",
-          width: "10px",
-          height: "10px",
+          width: "9px",
+          height: "9px",
           borderRadius: "50%",
           background: dotColor,
-          boxShadow: `0 0 8px ${dotColor}`,
+          boxShadow: focused ? `0 0 0 3px ${dotColor}25` : "none",
           zIndex: 1,
+          transition: "box-shadow 0.2s",
         }}
       />
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder || label}
+        placeholder={placeholder}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         style={{
           width: "100%",
-          background: "rgba(255,255,255,0.06)",
-          border: "1.5px solid rgba(255,255,255,0.1)",
+          background: focused ? "#fff" : "#f9fafb",
+          border: `1.5px solid ${focused ? dotColor : "#e5e7eb"}`,
           borderRadius: "10px",
-          padding: "12px 14px 12px 34px",
-          color: "#f1f5f9",
-          fontSize: "14px",
-          fontFamily: "DM Sans, sans-serif",
+          padding: "11px 13px 11px 31px",
+          color: "#111827",
+          fontSize: "13.5px",
           outline: "none",
-          transition: "border-color 0.2s",
+          transition: "border-color 0.2s, background 0.2s, box-shadow 0.2s",
+          boxShadow: focused ? `0 0 0 3px ${dotColor}14` : "none",
         }}
-        onFocus={(e) => (e.target.style.borderColor = dotColor)}
-        onBlur={(e) => (e.target.style.borderColor = "rgba(255,255,255,0.1)")}
       />
     </div>
   );
@@ -252,7 +237,9 @@ export default function TruckItApp() {
   const [durationMin, setDurationMin] = useState(null);
   const [selectedTruck, setSelectedTruck] = useState("medium");
   const [booked, setBooked] = useState(false);
+  const [bookingLoading, setBookingLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const router = useRouter();
 
   const selectedTruckData = TRUCK_TYPES.find((t) => t.id === selectedTruck) ?? TRUCK_TYPES[1];
   const totalPrice = distanceKm ? Math.round(distanceKm * selectedTruckData.baseRate) : null;
@@ -273,7 +260,6 @@ export default function TruckItApp() {
     setCoordA(null);
     setCoordB(null);
     setBooked(false);
-
     try {
       const [a, b] = await Promise.all([geocode(from), geocode(to)]);
       if (!a) throw new Error(`Could not find: "${from}"`);
@@ -297,6 +283,47 @@ export default function TruckItApp() {
     }
   }, [from, to]);
 
+  const handleBook = async () => {
+    if (!distanceKm) return;
+    
+    const token = localStorage.getItem("token");
+    if (!token) {
+      toast.error("Please sign in to book a truck");
+      router.push("/login");
+      return;
+    }
+
+    setBookingLoading(true);
+    try {
+      const res = await fetch("/api/trips", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          pickup: from,
+          dropoff: to,
+          truckType: selectedTruckData.label,
+          price: totalPrice,
+          distance: distanceKm
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to book");
+      }
+
+      setBooked(true);
+      toast.success("Truck booked successfully!");
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setBookingLoading(false);
+    }
+  };
+
   useEffect(() => {
     handleSearch();
     // eslint-disable-next-line
@@ -304,211 +331,90 @@ export default function TruckItApp() {
 
   return (
     <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Syne:wght@700;800;900&display=swap');
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: #0a0d14; }
+      <style dangerouslySetInnerHTML={{ __html: `
         ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(249,115,22,0.4); border-radius: 4px; }
-        input::placeholder { color: rgba(255,255,255,0.3) !important; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }
+        input::placeholder { color: #9ca3af !important; }
         .leaflet-control-zoom a {
-          background: rgba(15,18,28,0.95) !important;
-          color: #f1f5f9 !important;
-          border-color: rgba(255,255,255,0.15) !important;
+          background: #fff !important;
+          color: #374151 !important;
+          border-color: #e5e7eb !important;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.08) !important;
         }
-        .leaflet-control-zoom a:hover { background: rgba(249,115,22,0.2) !important; }
+        .leaflet-control-zoom a:hover { background: #f9fafb !important; color: #f97316 !important; }
         .leaflet-control-attribution { display: none !important; }
-      `}</style>
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.6;transform:scale(0.85)} }
+      `}} />
 
-      <div
-        style={{
-          fontFamily: "'DM Sans', sans-serif",
-          background: "#0a0d14",
-          minHeight: "100vh",
-          display: "flex",
-          flexDirection: "column",
-          color: "#f1f5f9",
-        }}
-      >
-        {/* ── Header ── */}
-        <header
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "12px 20px",
-            background: "rgba(10,13,20,0.95)",
-            borderBottom: "1px solid rgba(255,255,255,0.07)",
-            backdropFilter: "blur(12px)",
-            position: "sticky",
-            top: 0,
-            zIndex: 999,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <div
-              style={{
-                width: "36px",
-                height: "36px",
-                borderRadius: "10px",
-                background: "linear-gradient(135deg, #f97316, #c2410c)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "18px",
-                boxShadow: "0 0 20px rgba(249,115,22,0.4)",
-              }}
-            >
-              🚛
-            </div>
-            <span
-              style={{
-                fontFamily: "Syne, sans-serif",
-                fontWeight: 900,
-                fontSize: "22px",
-                letterSpacing: "-0.5px",
-              }}
-            >
-              TRUCK<span style={{ color: "#f97316" }}>IT</span>
-            </span>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "5px 12px",
-                borderRadius: "20px",
-                background: "rgba(34,197,94,0.1)",
-                border: "1px solid rgba(34,197,94,0.25)",
-                fontSize: "12px",
-                fontWeight: 600,
-                color: "#4ade80",
-              }}
-            >
-              <span
-                style={{
-                  width: "7px",
-                  height: "7px",
-                  borderRadius: "50%",
-                  background: "#22c55e",
-                  animation: "pulse 2s infinite",
-                  display: "inline-block",
-                }}
-              />
-              LIVE
-            </div>
-            <div
-              style={{
-                width: "34px",
-                height: "34px",
-                borderRadius: "50%",
-                background: "linear-gradient(135deg, #f97316, #7c3aed)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "13px",
-                fontWeight: 700,
-              }}
-            >
-              RK
-            </div>
-          </div>
-        </header>
+      <div className="bg-slate-50 h-screen overflow-hidden flex flex-col font-sans text-gray-900">
+        <Navbar />
 
         {/* ── Body ── */}
-        <div style={{ display: "flex", flex: 1, overflow: "hidden", height: "calc(100vh - 61px)" }}>
+        <div className="pt-[72px] flex flex-1 overflow-hidden relative">
 
           {/* ── Sidebar ── */}
           <AnimatePresence>
             {sidebarOpen && (
               <motion.aside
-                initial={{ x: -320, opacity: 0 }}
+                initial={{ x: -340, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
-                exit={{ x: -320, opacity: 0 }}
-                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                exit={{ x: -340, opacity: 0 }}
+                transition={{ type: "spring", stiffness: 300, damping: 32 }}
                 style={{
-                  width: "340px",
-                  minWidth: "340px",
-                  background: "rgba(13,16,25,0.97)",
-                  borderRight: "1px solid rgba(255,255,255,0.07)",
+                  width: "336px",
+                  minWidth: "336px",
+                  background: "#ffffff",
+                  borderRight: "1px solid #f1f5f9",
                   display: "flex",
                   flexDirection: "column",
                   overflowY: "auto",
                   overflowX: "hidden",
-                  backdropFilter: "blur(16px)",
+                  boxShadow: "2px 0 12px rgba(0,0,0,0.04)",
                 }}
               >
-                {/* Route inputs */}
-                <div style={{ padding: "20px 20px 0" }}>
-                  <p
-                    style={{
-                      fontFamily: "Syne, sans-serif",
-                      fontWeight: 800,
-                      fontSize: "18px",
-                      marginBottom: "16px",
-                      letterSpacing: "-0.3px",
-                    }}
-                  >
+                {/* ── Book section ── */}
+                <div style={{ padding: "20px 18px 0" }}>
+                  <p style={{ fontWeight: 700, fontSize: "17px", marginBottom: "14px", color: "#111827", letterSpacing: "-0.3px" }}>
                     Book a Truck
                   </p>
 
-                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                    {/* Connector line */}
-                    <div style={{ position: "relative" }}>
-                      <div
-                        style={{
-                          position: "absolute",
-                          left: "19px",
-                          top: "100%",
-                          width: "2px",
-                          height: "10px",
-                          background: "rgba(255,255,255,0.12)",
-                          zIndex: 2,
-                        }}
-                      />
-                    </div>
-                    <RouteInput
-                      label="Pickup"
-                      value={from}
-                      onChange={setFrom}
-                      dotColor="#f97316"
-                      placeholder="Pickup location"
-                    />
-                    <RouteInput
-                      label="Drop"
-                      value={to}
-                      onChange={setTo}
-                      dotColor="#22c55e"
-                      placeholder="Drop location"
-                    />
+                  {/* Inputs with connector */}
+                  <div style={{ position: "relative", display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {/* Dashed connector */}
+                    <div style={{
+                      position: "absolute",
+                      left: "17px",
+                      top: "36px",
+                      width: "1.5px",
+                      height: "18px",
+                      background: "repeating-linear-gradient(to bottom, #d1d5db 0px, #d1d5db 4px, transparent 4px, transparent 8px)",
+                      zIndex: 2,
+                    }} />
+                    <RouteInput value={from} onChange={setFrom} dotColor="#f97316" placeholder="Pickup location" />
+                    <RouteInput value={to} onChange={setTo} dotColor="#22c55e" placeholder="Drop location" />
                   </div>
 
                   <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.97 }}
+                    whileHover={{ scale: 1.015 }}
+                    whileTap={{ scale: 0.975 }}
                     onClick={handleSearch}
                     disabled={loading}
                     style={{
                       width: "100%",
-                      marginTop: "14px",
-                      padding: "13px",
-                      borderRadius: "12px",
+                      marginTop: "12px",
+                      padding: "12px",
+                      borderRadius: "10px",
                       border: "none",
-                      background: loading
-                        ? "rgba(249,115,22,0.4)"
-                        : "linear-gradient(135deg, #f97316, #c2410c)",
-                      color: "white",
-                      fontFamily: "Syne, sans-serif",
-                      fontWeight: 700,
-                      fontSize: "14px",
-                      letterSpacing: "0.5px",
+                      background: loading ? "#fed7aa" : "linear-gradient(135deg, #f97316, #ea580c)",
+                      color: loading ? "#9a3412" : "white",
+                      fontWeight: 600,
+                      fontSize: "13.5px",
                       cursor: loading ? "not-allowed" : "pointer",
-                      boxShadow: loading ? "none" : "0 4px 20px rgba(249,115,22,0.35)",
+                      boxShadow: loading ? "none" : "0 3px 14px rgba(249,115,22,0.3)",
                       transition: "all 0.2s",
+                      letterSpacing: "0.1px",
                     }}
                   >
                     {loading ? "Finding route…" : "🔍  Search Route"}
@@ -521,13 +427,13 @@ export default function TruckItApp() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0 }}
                         style={{
-                          marginTop: "10px",
-                          padding: "10px 14px",
-                          borderRadius: "10px",
-                          background: "rgba(239,68,68,0.12)",
-                          border: "1px solid rgba(239,68,68,0.3)",
-                          color: "#fca5a5",
-                          fontSize: "13px",
+                          marginTop: "9px",
+                          padding: "9px 13px",
+                          borderRadius: "9px",
+                          background: "#fef2f2",
+                          border: "1px solid #fecaca",
+                          color: "#dc2626",
+                          fontSize: "12.5px",
                         }}
                       >
                         ⚠️ {error}
@@ -536,45 +442,45 @@ export default function TruckItApp() {
                   </AnimatePresence>
                 </div>
 
-                {/* Route stats */}
+                {/* ── Route stats ── */}
                 <AnimatePresence>
                   {distanceKm !== null && !loading && (
                     <motion.div
-                      initial={{ opacity: 0, y: 10 }}
+                      initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0 }}
-                      style={{ padding: "16px 20px 0" }}
+                      style={{ padding: "14px 18px 0" }}
                     >
                       <div
                         style={{
-                          borderRadius: "14px",
-                          padding: "14px 16px",
-                          background: "rgba(249,115,22,0.07)",
-                          border: "1px solid rgba(249,115,22,0.18)",
+                          borderRadius: "12px",
+                          padding: "13px 14px",
+                          background: "#fff7ed",
+                          border: "1px solid #fed7aa",
                           display: "flex",
                           justifyContent: "space-around",
                           gap: "8px",
                         }}
                       >
                         <div style={{ textAlign: "center" }}>
-                          <div style={{ fontSize: "20px", fontWeight: 700, color: "#fb923c", fontFamily: "Syne, sans-serif" }}>
+                          <div style={{ fontSize: "18px", fontWeight: 700, color: "#ea580c" }}>
                             {distanceKm.toFixed(0)} km
                           </div>
-                          <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.4)", marginTop: "2px" }}>Distance</div>
+                          <div style={{ fontSize: "10.5px", color: "#9ca3af", marginTop: "2px" }}>Distance</div>
                         </div>
-                        <div style={{ width: "1px", background: "rgba(255,255,255,0.08)" }} />
+                        <div style={{ width: "1px", background: "#fed7aa" }} />
                         <div style={{ textAlign: "center" }}>
-                          <div style={{ fontSize: "20px", fontWeight: 700, color: "#38bdf8", fontFamily: "Syne, sans-serif" }}>
+                          <div style={{ fontSize: "18px", fontWeight: 700, color: "#0284c7" }}>
                             {durationMin != null ? formatDuration(durationMin) : "—"}
                           </div>
-                          <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.4)", marginTop: "2px" }}>Est. Time</div>
+                          <div style={{ fontSize: "10.5px", color: "#9ca3af", marginTop: "2px" }}>Est. Time</div>
                         </div>
-                        <div style={{ width: "1px", background: "rgba(255,255,255,0.08)" }} />
+                        <div style={{ width: "1px", background: "#fed7aa" }} />
                         <div style={{ textAlign: "center" }}>
-                          <div style={{ fontSize: "20px", fontWeight: 700, color: "#a78bfa", fontFamily: "Syne, sans-serif" }}>
+                          <div style={{ fontSize: "18px", fontWeight: 700, color: "#7c3aed" }}>
                             ₹{totalPrice?.toLocaleString() ?? "—"}
                           </div>
-                          <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.4)", marginTop: "2px" }}>Est. Fare</div>
+                          <div style={{ fontSize: "10.5px", color: "#9ca3af", marginTop: "2px" }}>Est. Fare</div>
                         </div>
                       </div>
                     </motion.div>
@@ -582,14 +488,14 @@ export default function TruckItApp() {
                 </AnimatePresence>
 
                 {/* Divider */}
-                <div style={{ margin: "18px 20px 0", borderTop: "1px solid rgba(255,255,255,0.06)" }} />
+                <div style={{ margin: "16px 18px 0", borderTop: "1px solid #f1f5f9" }} />
 
-                {/* Truck types */}
-                <div style={{ padding: "16px 20px 0" }}>
-                  <p style={{ fontSize: "12px", fontWeight: 600, color: "rgba(255,255,255,0.35)", letterSpacing: "1px", marginBottom: "12px", textTransform: "uppercase" }}>
+                {/* ── Vehicle selector ── */}
+                <div style={{ padding: "14px 18px 0" }}>
+                  <p style={{ fontSize: "11px", fontWeight: 600, color: "#9ca3af", letterSpacing: "0.8px", marginBottom: "10px", textTransform: "uppercase" }}>
                     Select Vehicle
                   </p>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "7px" }}>
                     {TRUCK_TYPES.map((truck) => (
                       <TruckCard
                         key={truck.id}
@@ -602,76 +508,78 @@ export default function TruckItApp() {
                   </div>
                 </div>
 
-                {/* Booking */}
-                <div style={{ padding: "18px 20px 24px", marginTop: "auto" }}>
+                {/* ── Book button ── */}
+                <div style={{ padding: "16px 18px 22px", marginTop: "auto" }}>
                   <AnimatePresence mode="wait">
                     {!booked ? (
                       <motion.button
                         key="book"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
-                        exit={{ opacity: 0, scale: 0.9 }}
-                        whileHover={{ scale: distanceKm ? 1.02 : 1 }}
-                        whileTap={{ scale: distanceKm ? 0.97 : 1 }}
-                        onClick={() => distanceKm && setBooked(true)}
+                        exit={{ opacity: 0, scale: 0.92 }}
+                        whileHover={{ scale: distanceKm ? 1.015 : 1 }}
+                        whileTap={{ scale: distanceKm ? 0.975 : 1 }}
+                        onClick={handleBook}
+                        disabled={bookingLoading}
                         style={{
                           width: "100%",
-                          padding: "15px",
-                          borderRadius: "14px",
+                          padding: "14px",
+                          borderRadius: "12px",
                           border: "none",
                           background: distanceKm
-                            ? `linear-gradient(135deg, ${selectedTruckData.color}, ${selectedTruckData.color}99)`
-                            : "rgba(255,255,255,0.06)",
-                          color: distanceKm ? "white" : "rgba(255,255,255,0.3)",
-                          fontFamily: "Syne, sans-serif",
-                          fontWeight: 800,
-                          fontSize: "15px",
+                            ? selectedTruckData.color
+                            : "#f3f4f6",
+                          color: distanceKm ? "white" : "#9ca3af",
+                          fontWeight: 700,
+                          fontSize: "14px",
                           cursor: distanceKm ? "pointer" : "not-allowed",
-                          boxShadow: distanceKm ? `0 4px 24px ${selectedTruckData.color}44` : "none",
+                          boxShadow: distanceKm ? `0 4px 18px ${selectedTruckData.color}40` : "none",
                           transition: "all 0.25s",
-                          letterSpacing: "0.3px",
+                          opacity: bookingLoading ? 0.7 : 1,
                         }}
                       >
-                        {distanceKm
+                        {bookingLoading ? "Booking..." : (distanceKm
                           ? `Book ${selectedTruckData.icon} ${selectedTruckData.label} · ₹${totalPrice?.toLocaleString()}`
-                          : "Search a route first"}
+                          : "Search a route first")}
                       </motion.button>
                     ) : (
                       <motion.div
                         key="confirmed"
-                        initial={{ scale: 0.85, opacity: 0 }}
+                        initial={{ scale: 0.88, opacity: 0 }}
                         animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.85, opacity: 0 }}
-                        transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                        exit={{ scale: 0.88, opacity: 0 }}
+                        transition={{ type: "spring", stiffness: 400, damping: 26 }}
                         style={{
-                          borderRadius: "14px",
-                          padding: "18px",
-                          background: "rgba(34,197,94,0.1)",
-                          border: "1.5px solid rgba(34,197,94,0.35)",
+                          borderRadius: "12px",
+                          padding: "16px",
+                          background: "#f0fdf4",
+                          border: "1.5px solid #bbf7d0",
                           textAlign: "center",
                         }}
                       >
-                        <div style={{ fontSize: "32px", marginBottom: "8px" }}>✅</div>
-                        <div style={{ fontFamily: "Syne, sans-serif", fontWeight: 800, fontSize: "16px", color: "#4ade80", marginBottom: "4px" }}>
+                        <div style={{ fontSize: "28px", marginBottom: "6px" }}>✅</div>
+                        <div style={{ fontWeight: 700, fontSize: "15px", color: "#15803d", marginBottom: "4px" }}>
                           Booking Confirmed!
                         </div>
-                        <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.5)" }}>
+                        <div style={{ fontSize: "12.5px", color: "#6b7280" }}>
                           {selectedTruckData.icon} {selectedTruckData.label} · {from} → {to}
                         </div>
-                        <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.5)", marginTop: "2px" }}>
+                        <div style={{ fontSize: "12.5px", color: "#6b7280", marginTop: "2px" }}>
                           ₹{totalPrice?.toLocaleString()} · {durationMin ? formatDuration(durationMin) : ""}
                         </div>
                         <button
                           onClick={() => setBooked(false)}
                           style={{
-                            marginTop: "12px",
-                            padding: "8px 18px",
+                            marginTop: "10px",
+                            padding: "7px 16px",
                             borderRadius: "8px",
-                            border: "1px solid rgba(255,255,255,0.15)",
-                            background: "transparent",
-                            color: "rgba(255,255,255,0.5)",
+                            border: "1px solid #d1fae5",
+                            background: "#fff",
+                            color: "#15803d",
                             fontSize: "12px",
+                            fontWeight: 500,
                             cursor: "pointer",
+                            transition: "background 0.15s",
                           }}
                         >
                           New Booking
@@ -686,7 +594,8 @@ export default function TruckItApp() {
 
           {/* ── Map area ── */}
           <div style={{ flex: 1, position: "relative", padding: "12px" }}>
-            {/* Toggle sidebar button */}
+
+            {/* Sidebar toggle */}
             <button
               onClick={() => setSidebarOpen((v) => !v)}
               style={{
@@ -695,18 +604,18 @@ export default function TruckItApp() {
                 left: sidebarOpen ? "-1px" : "12px",
                 transform: "translateY(-50%)",
                 zIndex: 10,
-                width: "28px",
-                height: "56px",
+                width: "24px",
+                height: "52px",
                 borderRadius: sidebarOpen ? "0 8px 8px 0" : "8px",
-                border: "1px solid rgba(255,255,255,0.12)",
-                background: "rgba(13,16,25,0.95)",
-                color: "rgba(255,255,255,0.5)",
+                border: "1px solid #e5e7eb",
+                background: "#ffffff",
+                color: "#9ca3af",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontSize: "14px",
-                backdropFilter: "blur(8px)",
+                fontSize: "12px",
+                boxShadow: "2px 0 8px rgba(0,0,0,0.06)",
                 transition: "left 0.3s",
               }}
             >
@@ -714,46 +623,46 @@ export default function TruckItApp() {
             </button>
 
             {/* Map */}
-            <div style={{ width: "100%", height: "100%", borderRadius: "16px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.07)" }}>
+            <div style={{ width: "100%", height: "100%", borderRadius: "16px", overflow: "hidden", border: "1px solid #e5e7eb", boxShadow: "0 2px 16px rgba(0,0,0,0.06)" }}>
               <LeafletMap pointA={coordA} pointB={coordB} routeGeometry={routeGeometry} />
             </div>
 
-            {/* Route pill overlay */}
+            {/* Route pill */}
             <AnimatePresence>
               {distanceKm !== null && !loading && (
                 <motion.div
-                  initial={{ opacity: 0, y: 12 }}
+                  initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 12 }}
+                  exit={{ opacity: 0, y: 10 }}
                   style={{
                     position: "absolute",
                     bottom: "24px",
                     left: "50%",
                     transform: "translateX(-50%)",
-                    background: "rgba(10,13,20,0.92)",
-                    border: "1px solid rgba(255,255,255,0.12)",
-                    backdropFilter: "blur(14px)",
+                    background: "rgba(255,255,255,0.96)",
+                    border: "1px solid #e5e7eb",
+                    backdropFilter: "blur(12px)",
                     borderRadius: "40px",
-                    padding: "10px 20px",
+                    padding: "9px 18px",
                     display: "flex",
                     alignItems: "center",
                     gap: "10px",
                     fontSize: "13px",
                     whiteSpace: "nowrap",
                     zIndex: 5,
-                    boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+                    boxShadow: "0 4px 20px rgba(0,0,0,0.10)",
                   }}
                 >
-                  <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#f97316", display: "inline-block", boxShadow: "0 0 6px #f97316" }} />
-                    <span style={{ color: "rgba(255,255,255,0.6)" }}>{from}</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#f97316", display: "inline-block" }} />
+                    <span style={{ color: "#374151", fontWeight: 500 }}>{from}</span>
                   </span>
-                  <span style={{ color: "rgba(255,255,255,0.2)", fontSize: "18px" }}>·····</span>
-                  <span style={{ fontWeight: 700, color: "#fb923c", fontFamily: "Syne, sans-serif" }}>{distanceKm.toFixed(0)} km</span>
-                  <span style={{ color: "rgba(255,255,255,0.2)", fontSize: "18px" }}>·····</span>
-                  <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#22c55e", display: "inline-block", boxShadow: "0 0 6px #22c55e" }} />
-                    <span style={{ color: "rgba(255,255,255,0.6)" }}>{to}</span>
+                  <span style={{ color: "#d1d5db", fontSize: "16px" }}>·····</span>
+                  <span style={{ fontWeight: 700, color: "#f97316" }}>{distanceKm.toFixed(0)} km</span>
+                  <span style={{ color: "#d1d5db", fontSize: "16px" }}>·····</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />
+                    <span style={{ color: "#374151", fontWeight: 500 }}>{to}</span>
                   </span>
                 </motion.div>
               )}
@@ -770,28 +679,18 @@ export default function TruckItApp() {
                     position: "absolute",
                     inset: "12px",
                     borderRadius: "16px",
-                    background: "rgba(10,13,20,0.65)",
+                    background: "rgba(248,250,252,0.75)",
                     backdropFilter: "blur(4px)",
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
                     justifyContent: "center",
-                    gap: "14px",
+                    gap: "12px",
                     zIndex: 6,
                   }}
                 >
-                  <div
-                    style={{
-                      width: "44px",
-                      height: "44px",
-                      borderRadius: "50%",
-                      border: "3px solid rgba(249,115,22,0.2)",
-                      borderTop: "3px solid #f97316",
-                      animation: "spin 0.8s linear infinite",
-                    }}
-                  />
-                  <span style={{ color: "rgba(255,255,255,0.6)", fontSize: "14px" }}>Finding best route…</span>
-                  <style>{`@keyframes spin { to { transform: rotate(360deg); } } @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
+                  <div style={{ width: "40px", height: "40px", borderRadius: "50%", border: "3px solid #fed7aa", borderTop: "3px solid #f97316", animation: "spin 0.8s linear infinite" }} />
+                  <span style={{ color: "#6b7280", fontSize: "13.5px", fontWeight: 500 }}>Finding best route…</span>
                 </motion.div>
               )}
             </AnimatePresence>

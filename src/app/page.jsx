@@ -164,109 +164,7 @@ function FAQItem({ q, a, delay }) {
   );
 }
 
-// ── Navbar ────────────────────────────────────
-function Navbar() {
-  const [scrolled, setScrolled] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
-
-  useEffect(() => {
-    const fn = () => setScrolled(window.scrollY > 20);
-    window.addEventListener("scroll", fn);
-    return () => window.removeEventListener("scroll", fn);
-  }, []);
-
-  const links = ["Features", "How It Works", "Fleet", "Testimonials", "FAQ"];
-
-  return (
-    <motion.nav
-      initial={{ y: -80, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-      className={`fixed top-4 left-1/2 z-50 w-[calc(100%-2rem)] max-w-5xl -translate-x-1/2 rounded-2xl transition-all duration-300 ${
-        scrolled
-          ? "bg-white/90 shadow-lg shadow-gray-200/60 backdrop-blur-md border border-gray-100"
-          : "bg-white/70 backdrop-blur-sm border border-gray-100/60"
-      }`}
-    >
-      <div className="flex items-center justify-between px-5 py-3">
-        {/* Logo */}
-        <a href="#" className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-xl bg-orange-500 flex items-center justify-center text-base shadow-md shadow-orange-200">
-            🚛
-          </div>
-          <span className="font-extrabold text-gray-900 tracking-tight text-lg">
-            TRUCK<span className="text-orange-500">IT</span>
-          </span>
-        </a>
-
-        {/* Desktop links */}
-        <div className="hidden md:flex items-center gap-7">
-          {links.map((l) => (
-            <a
-              key={l}
-              href={`#${l.toLowerCase().replace(/\s+/g, "-")}`}
-              className="text-sm text-gray-500 hover:text-gray-900 transition-colors duration-200"
-            >
-              {l}
-            </a>
-          ))}
-        </div>
-
-        {/* CTA */}
-        <div className="hidden md:flex items-center gap-3">
-          <a href="#" className="text-sm text-gray-500 hover:text-gray-900 transition-colors">
-            Sign In
-          </a>
-          <a
-            href="/startbooking"
-            className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-orange-200 hover:bg-orange-600 transition-colors duration-200"
-          >
-            Start Booking →
-          </a>
-        </div>
-
-        {/* Mobile hamburger */}
-        <button
-          className="md:hidden text-gray-500 text-xl"
-          onClick={() => setMobileOpen((v) => !v)}
-        >
-          {mobileOpen ? "✕" : "☰"}
-        </button>
-      </div>
-
-      {/* Mobile menu */}
-      <AnimatePresence>
-        {mobileOpen && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25 }}
-            className="overflow-hidden border-t border-gray-100 px-5 pb-4"
-          >
-            {links.map((l) => (
-              <a
-                key={l}
-                href={`#${l.toLowerCase().replace(/\s+/g, "-")}`}
-                className="block py-2.5 text-sm text-gray-600 hover:text-orange-500"
-                onClick={() => setMobileOpen(false)}
-              >
-                {l}
-              </a>
-            ))}
-            <a
-              href="/startbooking"
-              className="mt-3 block rounded-xl bg-orange-500 px-4 py-2.5 text-center text-sm font-semibold text-white"
-              onClick={() => setMobileOpen(false)}
-            >
-              Start Booking →
-            </a>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.nav>
-  );
-}
+import Navbar from "@/components/Navbar";
 
 // ── Main Landing Page ─────────────────────────
 export default function TruckItLanding() {
@@ -277,11 +175,6 @@ export default function TruckItLanding() {
 
   return (
     <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
-        * { font-family: 'Poppins', sans-serif !important; }
-        html { scroll-behavior: smooth; }
-      `}</style>
 
       <div className="bg-white text-gray-900 antialiased overflow-x-hidden">
         <Navbar />
@@ -319,11 +212,11 @@ export default function TruckItLanding() {
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
-              className="mt-6 text-5xl sm:text-6xl md:text-7xl font-extrabold tracking-tight leading-[1.08] text-gray-900"
+              className="mt-6 text-5xl sm:text-6xl md:text-8xl font-extrabold tracking-tight leading-[1.05] text-gray-900 font-serif"
             >
               Move anything,
               <br />
-              <span className="text-orange-500">anywhere.</span>
+              <span className="text-orange-500 font-cursive italic font-normal text-6xl sm:text-7xl md:text-9xl">anywhere.</span>
             </motion.h1>
 
             <motion.p
@@ -425,7 +318,7 @@ export default function TruckItLanding() {
           <div className="mx-auto max-w-5xl">
             <FadeUp className="text-center mb-14">
               <Pill>Why TruckIt</Pill>
-              <h2 className="mt-4 text-4xl font-extrabold tracking-tight text-gray-900">
+              <h2 className="mt-4 text-4xl font-extrabold tracking-tight text-gray-900 font-serif">
                 Built for reliability.
               </h2>
               <p className="mt-3 text-gray-500 max-w-md mx-auto text-sm leading-relaxed">
@@ -454,7 +347,7 @@ export default function TruckItLanding() {
             <div>
               <FadeUp>
                 <Pill>Simple Process</Pill>
-                <h2 className="mt-4 text-4xl font-extrabold tracking-tight text-gray-900 leading-tight">
+                <h2 className="mt-4 text-4xl font-extrabold tracking-tight text-gray-900 leading-tight font-serif">
                   Book in four
                   <br />
                   easy steps.
@@ -482,7 +375,7 @@ export default function TruckItLanding() {
           <div className="mx-auto max-w-5xl">
             <FadeUp className="text-center mb-14">
               <Pill>Our Fleet</Pill>
-              <h2 className="mt-4 text-4xl font-extrabold tracking-tight text-gray-900">
+              <h2 className="mt-4 text-4xl font-extrabold tracking-tight text-gray-900 font-serif">
                 The right truck for every load.
               </h2>
               <p className="mt-3 text-gray-500 max-w-md mx-auto text-sm leading-relaxed">
@@ -517,7 +410,7 @@ export default function TruckItLanding() {
           <div className="mx-auto max-w-5xl">
             <FadeUp className="text-center mb-14">
               <Pill>Testimonials</Pill>
-              <h2 className="mt-4 text-4xl font-extrabold tracking-tight text-gray-900">
+              <h2 className="mt-4 text-4xl font-extrabold tracking-tight text-gray-900 font-serif">
                 Trusted by thousands.
               </h2>
               <p className="mt-3 text-gray-500 max-w-md mx-auto text-sm leading-relaxed">
@@ -565,7 +458,7 @@ export default function TruckItLanding() {
           <div className="mx-auto max-w-2xl">
             <FadeUp className="text-center mb-14">
               <Pill>FAQ</Pill>
-              <h2 className="mt-4 text-4xl font-extrabold tracking-tight text-gray-900">
+              <h2 className="mt-4 text-4xl font-extrabold tracking-tight text-gray-900 font-serif">
                 Common questions.
               </h2>
             </FadeUp>
@@ -592,7 +485,7 @@ export default function TruckItLanding() {
                 <div className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 h-64 w-64 bg-orange-500 opacity-20 blur-3xl rounded-full" />
                 <div className="relative z-10">
                   <Pill>Ready to move?</Pill>
-                  <h2 className="mt-5 text-4xl sm:text-5xl font-extrabold tracking-tight text-white leading-tight">
+                  <h2 className="mt-5 text-4xl sm:text-5xl font-extrabold tracking-tight text-white leading-tight font-serif">
                     Your first booking
                     <br />
                     is on us.
