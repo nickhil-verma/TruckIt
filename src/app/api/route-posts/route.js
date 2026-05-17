@@ -30,7 +30,7 @@ export async function POST(req) {
     if (!user || user.role !== "driver") return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     await connectToDatabase();
-    const { origin, destination, date, truckType } = await req.json();
+    const { origin, destination, date, truckType, price, viaStops } = await req.json();
 
     const routePost = await RoutePost.create({
       driverId: user.id,
@@ -38,6 +38,8 @@ export async function POST(req) {
       destination,
       date,
       truckType,
+      price: price ? Number(price) : 0,
+      viaStops: viaStops || [],
       status: "active"
     });
 

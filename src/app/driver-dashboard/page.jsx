@@ -3,7 +3,124 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import toast from "react-hot-toast";
-import { LayoutDashboard, Search, Truck, CheckCircle, MessageSquare, Settings, CreditCard, Check, CheckCheck, MapPin, PlusCircle } from "lucide-react";
+import { LayoutDashboard, Search, Truck, CheckCircle, MessageSquare, Settings, CreditCard, Check, CheckCheck, MapPin, PlusCircle, Star, Trash2 } from "lucide-react";
+
+// Geo helpers for driver route posting
+async function geocode(query) {
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`;
+  try {
+    const res = await fetch(url, { headers: { "Accept-Language": "en" } });
+    const data = await res.json();
+    if (!data.length) return null;
+    return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+  } catch {
+    return null;
+  }
+}
+
+// Leaflet Map Wrapper for Driver Return Route Preview
+function LeafletMap({ pointA, pointB, viaStopsCoords, routeGeometry }) {
+  const mapRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const layersRef = useRef([]);
+
+  useEffect(() => {
+    const loadLeaflet = async () => {
+      if (typeof window === "undefined") return;
+      if (!window.L) {
+        await new Promise((resolve) => {
+          const link = document.createElement("link");
+          link.rel = "stylesheet";
+          link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+          document.head.appendChild(link);
+          const script = document.createElement("script");
+          script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+          script.onload = resolve;
+          document.head.appendChild(script);
+        });
+      }
+      if (!mapInstanceRef.current && mapRef.current) {
+        const L = window.L;
+        const map = L.map(mapRef.current, {
+          center: [20.5937, 78.9629],
+          zoom: 5,
+          zoomControl: false,
+        });
+        L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+          attribution: "©OSM ©Carto",
+          maxZoom: 19,
+        }).addTo(map);
+        L.control.zoom({ position: "bottomright" }).addTo(map);
+        mapInstanceRef.current = map;
+      }
+    };
+    loadLeaflet();
+  }, []);
+
+  useEffect(() => {
+    const L = window.L;
+    const map = mapInstanceRef.current;
+    if (!L || !map) return;
+    layersRef.current.forEach((l) => map.removeLayer(l));
+    layersRef.current = [];
+    if (!pointA || !pointB) return;
+
+    const iconA = L.divIcon({
+      className: "",
+      html: `<div style="width:14px;height:14px;background:#f97316;border:2.5px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(249,115,22,0.4)"></div>`,
+      iconAnchor: [7, 7],
+    });
+    const iconB = L.divIcon({
+      className: "",
+      html: `<div style="width:14px;height:14px;background:#16a34a;border:2.5px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(22,163,74,0.4)"></div>`,
+      iconAnchor: [7, 7],
+    });
+    const iconVia = L.divIcon({
+      className: "",
+      html: `<div style="width:10px;height:10px;background:#8b5cf6;border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(139,92,246,0.4)"></div>`,
+      iconAnchor: [5, 5],
+    });
+
+    const mA = L.marker([pointA.lat, pointA.lon], { icon: iconA }).addTo(map);
+    const mB = L.marker([pointB.lat, pointB.lon], { icon: iconB }).addTo(map);
+    layersRef.current.push(mA, mB);
+
+    if (viaStopsCoords && viaStopsCoords.length > 0) {
+      viaStopsCoords.forEach(coord => {
+        const marker = L.marker([coord.lat, coord.lon], { icon: iconVia }).addTo(map);
+        layersRef.current.push(marker);
+      });
+    }
+
+    if (routeGeometry && routeGeometry.length > 0) {
+      const polyline = L.polyline(routeGeometry, {
+        color: "#f97316",
+        weight: 5,
+        opacity: 0.85,
+      }).addTo(map);
+      layersRef.current.push(polyline);
+      const bounds = polyline.getBounds();
+      if (bounds.isValid()) {
+        map.invalidateSize();
+        map.fitBounds(bounds, { padding: [40, 40] });
+      }
+    } else {
+      const bounds = L.latLngBounds([pointA.lat, pointA.lon], [pointB.lat, pointB.lon]);
+      if (bounds.isValid()) {
+        map.invalidateSize();
+        map.fitBounds(bounds, { padding: [50, 50] });
+      }
+    }
+  }, [pointA, pointB, viaStopsCoords, routeGeometry]);
+
+  return (
+    <div
+      ref={mapRef}
+      className="w-full h-[320px] md:h-full min-h-[300px] rounded-3xl overflow-hidden shadow-inner border border-slate-100"
+      style={{ position: "relative", zIndex: 1 }}
+    />
+  );
+}
 
 export default function DriverDashboard() {
   const [trips, setTrips] = useState([]);
@@ -24,8 +141,20 @@ export default function DriverDashboard() {
   const [user, setUser] = useState(null);
   const [postedRoutes, setPostedRoutes] = useState([]);
   
+  // Geocoding and routing states for driver route posts
+  const [driverFrom, setDriverFrom] = useState("Pune");
+  const [driverTo, setDriverTo] = useState("Mumbai");
+  const [driverStops, setDriverStops] = useState([]);
+  const [driverCoordA, setDriverCoordA] = useState(null);
+  const [driverCoordB, setDriverCoordB] = useState(null);
+  const [driverStopsCoords, setDriverStopsCoords] = useState([]);
+  const [driverRouteGeometry, setDriverRouteGeometry] = useState(null);
+  const [driverDistance, setDriverDistance] = useState(null);
+  const [driverDuration, setDriverDuration] = useState(null);
+  const [driverRouteLoading, setDriverRouteLoading] = useState(false);
+
   // Post Route form state
-  const [routeForm, setRouteForm] = useState({ origin: "", destination: "", date: "", truckType: "medium" });
+  const [routeForm, setRouteForm] = useState({ date: "", truckType: "medium", price: "" });
 
   const router = useRouter();
 
@@ -260,25 +389,99 @@ export default function DriverDashboard() {
     }
   };
 
+  const calculateDriverRoute = async () => {
+    if (!driverFrom.trim() || !driverTo.trim()) {
+      toast.error("Please enter Initial Dispatch Hub and Final Destination Terminal");
+      return;
+    }
+    setDriverRouteLoading(true);
+    try {
+      const [a, b] = await Promise.all([geocode(driverFrom), geocode(driverTo)]);
+      if (!a) throw new Error(`Could not find dispatch hub: "${driverFrom}"`);
+      if (!b) throw new Error(`Could not find target terminal: "${driverTo}"`);
+
+      setDriverCoordA(a);
+      setDriverCoordB(b);
+
+      const transitCoords = [];
+      for (const stop of driverStops) {
+        if (stop.trim()) {
+          const coord = await geocode(stop);
+          if (coord) {
+            transitCoords.push(coord);
+          } else {
+            toast.error(`Could not locate transit stop: "${stop}". Ignoring.`);
+          }
+        }
+      }
+      setDriverStopsCoords(transitCoords);
+
+      const coordsString = [
+        `${a.lon},${a.lat}`,
+        ...transitCoords.map(coord => `${coord.lon},${coord.lat}`),
+        `${b.lon},${b.lat}`
+      ].join(';');
+
+      const url = `https://router.project-osrm.org/route/v1/driving/${coordsString}?overview=full&geometries=geojson`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.code !== "Ok") throw new Error("Route mapping calculation failed");
+
+      const route = data.routes[0];
+      setDriverDistance(route.distance / 1000);
+      setDriverDuration(Math.round(route.duration / 60));
+      setDriverRouteGeometry(route.geometry.coordinates.map(([lng, lat]) => [lat, lng]));
+
+      toast.success("Return route processed successfully! Leaflet Map has been updated.");
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setDriverRouteLoading(false);
+    }
+  };
+
   const handlePostRoute = async (e) => {
     e.preventDefault();
-    if (!routeForm.origin || !routeForm.destination || !routeForm.date) return;
+    if (!driverFrom.trim() || !driverTo.trim() || !routeForm.date) {
+      toast.error("Please enter Dispatch Hub, Destination Terminal, and Return Date.");
+      return;
+    }
     const token = localStorage.getItem("token");
     try {
       const res = await fetch("/api/route-posts", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-        body: JSON.stringify(routeForm)
+        body: JSON.stringify({
+          origin: driverFrom,
+          destination: driverTo,
+          viaStops: driverStops.filter(s => s.trim() !== ""),
+          price: routeForm.price ? Number(routeForm.price) : Math.round((driverDistance || 100) * 12),
+          date: routeForm.date,
+          truckType: routeForm.truckType || "medium"
+        })
       });
       if (res.ok) {
-        toast.success("Empty return route posted successfully!");
-        setRouteForm({ origin: "", destination: "", date: "", truckType: "medium" });
-        fetchTrips(token);
+        toast.success("Empty return route published successfully!");
+        setDriverFrom("Pune");
+        setDriverTo("Mumbai");
+        setDriverStops([]);
+        setDriverCoordA(null);
+        setDriverCoordB(null);
+        setDriverStopsCoords([]);
+        setDriverRouteGeometry(null);
+        setDriverDistance(null);
+        setDriverDuration(null);
+        setRouteForm({ date: "", truckType: "medium", price: "" });
+        
+        // Re-fetch route posts
+        fetch("/api/route-posts?driverId=" + user.id)
+          .then(res => res.json())
+          .then(data => setPostedRoutes(data.routes || []));
       } else {
-        toast.error("Failed to post route");
+        toast.error("Failed to post empty route");
       }
     } catch (err) {
-      toast.error("Error posting route");
+      toast.error("Error publishing empty return route");
     }
   };
 
@@ -430,60 +633,233 @@ export default function DriverDashboard() {
 
           {/* TAB: POST ROUTE */}
           {activeTab === "post-route" && (
-            <div className="p-8 overflow-y-auto h-full">
-              <h2 className="text-3xl font-extrabold font-serif mb-6 text-gray-900">Post Empty Return Route</h2>
-              <p className="text-gray-500 mb-8 max-w-2xl">Returning empty from a delivery? Post your route here. Customers looking for a truck on this route can book you directly at a discounted rate.</p>
-              
-              <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm mb-8">
-                <form onSubmit={handlePostRoute} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Origin (From)</label>
-                    <input type="text" required value={routeForm.origin} onChange={e => setRouteForm({...routeForm, origin: e.target.value})} placeholder="e.g. Pune" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Destination (To)</label>
-                    <input type="text" required value={routeForm.destination} onChange={e => setRouteForm({...routeForm, destination: e.target.value})} placeholder="e.g. Mumbai" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Date of Return</label>
-                    <input type="date" required value={routeForm.date} onChange={e => setRouteForm({...routeForm, date: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Truck Type Available</label>
-                    <select value={routeForm.truckType} onChange={e => setRouteForm({...routeForm, truckType: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm">
-                      <option value="small">Small (Tata Ace / Mini) - 750kg</option>
-                      <option value="medium">Medium (Pickup 8ft) - 1.5 Ton</option>
-                      <option value="large">Large (Truck 14ft) - 4 Ton</option>
-                    </select>
-                  </div>
-                  <div className="md:col-span-2">
-                    <button type="submit" className="w-full md:w-auto bg-orange-500 text-white px-8 py-3 rounded-xl font-bold shadow-md shadow-orange-200 hover:bg-orange-600 transition-colors">
-                      Publish Route
-                    </button>
-                  </div>
-                </form>
-              </div>
+            <div className="p-8 overflow-y-auto h-full bg-slate-50/50">
+              <div className="max-w-6xl mx-auto">
+                <div className="mb-8">
+                  <span className="bg-orange-100 text-orange-850 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">Empty Return Optimizer</span>
+                  <h2 className="text-3xl font-extrabold font-serif mt-2 text-gray-900">Post Empty Return Route</h2>
+                  <p className="text-gray-550 mt-1 text-xs">Convert empty return miles into high-margin profit by plotting your return schedule on Leaflet OSRM Maps.</p>
+                </div>
 
-              <h3 className="font-bold text-gray-900 text-xl mb-4">Your Active Route Posts</h3>
-              {postedRoutes.length === 0 ? (
-                <div className="text-center py-6 text-gray-500 bg-gray-50 rounded-2xl border border-gray-100 border-dashed">
-                  You haven't posted any return routes yet.
-                </div>
-              ) : (
-                <div className="grid gap-4">
-                  {postedRoutes.map(route => (
-                    <div key={route._id} className="p-4 rounded-2xl border border-gray-100 flex items-center justify-between">
-                      <div>
-                        <p className="font-bold text-gray-900">{route.origin} → {route.destination}</p>
-                        <p className="text-xs text-gray-500 mt-1">Date: {route.date} · {route.truckType} truck</p>
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-8 items-stretch">
+                  {/* Left Side: Route Form */}
+                  <div className="lg:col-span-6 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between">
+                    <form onSubmit={handlePostRoute} className="space-y-5">
+                      
+                      {/* Dispatch Hub Names */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-black text-gray-700 uppercase tracking-wider mb-1.5">Initial Dispatch Terminal (Origin)</label>
+                          <input 
+                            type="text" 
+                            required 
+                            value={driverFrom} 
+                            onChange={e => setDriverFrom(e.target.value)} 
+                            placeholder="e.g. Pune" 
+                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-xs font-semibold" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-black text-gray-700 uppercase tracking-wider mb-1.5">Final Target Terminal (Destination)</label>
+                          <input 
+                            type="text" 
+                            required 
+                            value={driverTo} 
+                            onChange={e => setDriverTo(e.target.value)} 
+                            placeholder="e.g. Mumbai" 
+                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-xs font-semibold" 
+                          />
+                        </div>
                       </div>
-                      <span className={`text-[10px] uppercase font-bold tracking-widest px-2 py-1 rounded-full ${route.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                        {route.status}
-                      </span>
+
+                      {/* Via Transit Stops */}
+                      <div>
+                        <div className="flex justify-between items-center mb-1.5">
+                          <label className="block text-xs font-black text-gray-700 uppercase tracking-wider">Via Transit Stops</label>
+                          <button 
+                            type="button" 
+                            onClick={() => setDriverStops(prev => [...prev, ""])}
+                            className="text-[10px] font-bold text-orange-500 hover:text-orange-600 transition-colors uppercase tracking-wider flex items-center gap-1"
+                          >
+                            + Add Transit Stop
+                          </button>
+                        </div>
+                        
+                        {driverStops.length === 0 ? (
+                          <p className="text-[11px] text-gray-400 italic">No transit stops added yet. Click above to add intermediate stops.</p>
+                        ) : (
+                          <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                            {driverStops.map((stop, index) => (
+                              <div key={index} className="flex gap-2 items-center">
+                                <span className="text-[11px] font-bold text-gray-405 min-w-[20px]">#{index + 1}</span>
+                                <input
+                                  type="text"
+                                  value={stop}
+                                  onChange={e => {
+                                    const nextStops = [...driverStops];
+                                    nextStops[index] = e.target.value;
+                                    setDriverStops(nextStops);
+                                  }}
+                                  placeholder="e.g. Lonavala"
+                                  className="flex-1 px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-1 focus:ring-orange-500 text-xs font-medium"
+                                />
+                                <button 
+                                  type="button" 
+                                  onClick={() => setDriverStops(prev => prev.filter((_, idx) => idx !== index))}
+                                  className="p-2 text-gray-400 hover:text-red-500 transition-colors rounded-lg hover:bg-red-50"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="border-t border-gray-50 my-2"></div>
+
+                      {/* Route Fare and Date */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-black text-gray-700 uppercase tracking-wider mb-1.5">Asking Return Fare (₹)</label>
+                          <input 
+                            type="number" 
+                            value={routeForm.price} 
+                            onChange={e => setRouteForm({...routeForm, price: e.target.value})} 
+                            placeholder={driverDistance ? `Est: ₹${Math.round(driverDistance * 12)}` : "Enter custom price"} 
+                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-xs font-semibold" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-black text-gray-700 uppercase tracking-wider mb-1.5">Return Date</label>
+                          <input 
+                            type="date" 
+                            required 
+                            value={routeForm.date} 
+                            onChange={e => setRouteForm({...routeForm, date: e.target.value})} 
+                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-xs font-semibold" 
+                          />
+                        </div>
+                      </div>
+
+                      {/* Fleet Selection */}
+                      <div>
+                        <label className="block text-xs font-black text-gray-700 uppercase tracking-wider mb-1.5">Available Fleet Capacity</label>
+                        <select 
+                          value={routeForm.truckType} 
+                          onChange={e => setRouteForm({...routeForm, truckType: e.target.value})} 
+                          className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-xs font-semibold bg-white"
+                        >
+                          <option value="Mini">Mini (Tata Ace) - 1 Ton Capacity</option>
+                          <option value="Medium">Medium (Pickup 8ft) - 3 Ton Capacity</option>
+                          <option value="Heavy">Heavy (Truck 14ft) - 10 Ton Capacity</option>
+                        </select>
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                        <button
+                          type="button"
+                          disabled={driverRouteLoading}
+                          onClick={calculateDriverRoute}
+                          className="flex-1 bg-gray-105 text-gray-800 font-bold py-3 rounded-xl border border-gray-200 text-xs hover:bg-gray-100 transition-colors flex items-center justify-center gap-2"
+                        >
+                          {driverRouteLoading ? (
+                            <span className="w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin"></span>
+                          ) : (
+                            "Calculate & Preview Route"
+                          )}
+                        </button>
+                        
+                        <button 
+                          type="submit" 
+                          className="flex-1 bg-orange-500 text-white font-bold py-3 rounded-xl text-xs hover:bg-orange-600 transition-colors shadow-md shadow-orange-100 flex items-center justify-center"
+                        >
+                          Publish Empty Return Route
+                        </button>
+                      </div>
+
+                    </form>
+                  </div>
+
+                  {/* Right Side: Leaflet Map Preview */}
+                  <div className="lg:col-span-6 flex flex-col bg-white p-4 rounded-3xl border border-gray-100 shadow-sm min-h-[350px]">
+                    <div className="flex justify-between items-center mb-3">
+                      <h4 className="font-bold text-xs uppercase tracking-wider text-gray-600 flex items-center gap-1.5">
+                        <span className="inline-block w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse"></span>
+                        Map Router Preview
+                      </h4>
+                      {driverDistance && (
+                        <div className="flex gap-3 text-[11px] font-bold text-gray-500">
+                          <span>📏 {driverDistance.toFixed(1)} km</span>
+                          <span>⏱️ {Math.floor(driverDuration / 60)}h {driverDuration % 60}m</span>
+                        </div>
+                      )}
                     </div>
-                  ))}
+                    
+                    <div className="flex-1 h-full min-h-[300px] relative">
+                      {driverCoordA && driverCoordB ? (
+                        <LeafletMap 
+                          pointA={driverCoordA} 
+                          pointB={driverCoordB} 
+                          viaStopsCoords={driverStopsCoords} 
+                          routeGeometry={driverRouteGeometry} 
+                        />
+                      ) : (
+                        <div className="w-full h-full min-h-[300px] bg-slate-50 border border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center text-center p-6">
+                          <MapPin size={32} className="text-slate-350 mb-2 opacity-50" />
+                          <p className="text-xs font-semibold text-slate-500">No route active yet</p>
+                          <p className="text-[10px] text-slate-400 mt-1 max-w-[200px]">Fill in Dispatch Terminal, Destination Terminal and click "Calculate & Preview Route".</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              )}
+
+                {/* Published Routes Grid */}
+                <div className="mt-10">
+                  <h3 className="font-serif font-extrabold text-gray-900 text-xl mb-4">Your Published Fleet Schedules</h3>
+                  {postedRoutes.length === 0 ? (
+                    <div className="text-center py-8 text-gray-400 bg-white rounded-3xl border border-gray-100 shadow-sm">
+                      <Truck size={36} className="mx-auto mb-2 opacity-20" />
+                      <p className="text-xs font-semibold">No schedules posted yet.</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">Your optimized empty return routes will appear here.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {postedRoutes.map(route => (
+                        <div key={route._id} className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+                          <div>
+                            <div className="flex justify-between items-start mb-2">
+                              <span className={`text-[9px] uppercase font-black tracking-widest px-2 py-0.5 rounded-full ${route.status === 'active' ? 'bg-green-50 text-green-700 border border-green-150' : 'bg-gray-150 text-gray-500'}`}>
+                                {route.status}
+                              </span>
+                              <span className="text-[10px] font-bold text-gray-450">{route.date}</span>
+                            </div>
+                            <h4 className="font-bold text-gray-900 text-sm truncate">{route.origin} → {route.destination}</h4>
+                            
+                            {route.viaStops && route.viaStops.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {route.viaStops.map((stop, i) => (
+                                  <span key={i} className="text-[9px] bg-slate-100 text-slate-600 font-semibold px-2 py-0.5 rounded-md">
+                                    via {stop}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            <p className="text-[11px] text-gray-555 mt-2 font-semibold text-orange-600">Fleet: {route.truckType}</p>
+                          </div>
+                          <div className="mt-4 border-t border-gray-50 pt-3 flex justify-between items-center">
+                            <span className="text-[11px] text-gray-400 font-bold uppercase tracking-wider">Asking Return Fare</span>
+                            <span className="text-base font-black text-gray-900">₹{route.price.toLocaleString()}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+              </div>
             </div>
           )}
 
