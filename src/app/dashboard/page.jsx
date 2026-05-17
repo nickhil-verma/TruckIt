@@ -72,6 +72,94 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, [activeTab, selectedTrip]);
 
+  const lastMessageCountRef = useRef({});
+
+  // Background message monitoring for notifications
+  useEffect(() => {
+    if (!ongoingTrips || ongoingTrips.length === 0) return;
+
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    // Initialize counts if not set yet
+    ongoingTrips.forEach(trip => {
+      if (lastMessageCountRef.current[trip._id] === undefined) {
+        fetch(`/api/chat?tripId=${trip._id}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.messages) {
+              lastMessageCountRef.current[trip._id] = data.messages.length;
+            }
+          })
+          .catch(err => console.error(err));
+      }
+    });
+
+    const interval = setInterval(() => {
+      ongoingTrips.forEach(trip => {
+        fetch(`/api/chat?tripId=${trip._id}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.messages) {
+              const currentCount = lastMessageCountRef.current[trip._id] || 0;
+              const newCount = data.messages.length;
+
+              if (newCount > currentCount) {
+                const lastMsg = data.messages[newCount - 1];
+                // Check if last message was sent by the other party
+                if (lastMsg && lastMsg.senderId !== user?.id) {
+                  // Only show toast if not currently viewing this trip's chat
+                  if (!(activeTab === "chat" && selectedTrip?._id === trip._id)) {
+                    toast((t) => (
+                      <div className="flex flex-col gap-1.5 min-w-[250px]">
+                        <div className="font-bold text-gray-900 text-sm flex items-center gap-1.5">
+                          <span>💬</span> New message for trip!
+                        </div>
+                        <div className="text-xs text-gray-500 font-medium">
+                          ID: {trip._id.slice(-6).toUpperCase()} ({trip.pickup.split(',')[0]} → {trip.dropoff.split(',')[0]})
+                        </div>
+                        <div className="text-xs text-gray-700 italic bg-slate-50 border-l-2 border-orange-500 pl-2 py-1 mt-1 rounded-r-md">
+                          "{lastMsg.text}"
+                        </div>
+                        <button
+                          onClick={() => {
+                            setSelectedTrip(trip);
+                            setActiveTab("chat");
+                            toast.dismiss(t.id);
+                          }}
+                          className="mt-2 text-xs font-bold text-orange-600 bg-orange-50 py-1.5 px-3 rounded-lg hover:bg-orange-100 transition-colors w-max"
+                        >
+                          Reply to Driver 🚛
+                        </button>
+                      </div>
+                    ), {
+                      duration: 6000,
+                      position: "bottom-right",
+                      style: {
+                        background: '#ffffff',
+                        border: '1px solid #f3f4f6',
+                        borderRadius: '1.25rem',
+                        boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1)',
+                        padding: '12px'
+                      }
+                    });
+                  }
+                }
+                lastMessageCountRef.current[trip._id] = newCount;
+              }
+            }
+          })
+          .catch(err => console.error(err));
+      });
+    }, 4500); // Poll every 4.5 seconds
+
+    return () => clearInterval(interval);
+  }, [ongoingTrips, user, activeTab, selectedTrip]);
+
   const sendMessage = async (e) => {
     e.preventDefault();
     if (!text.trim() || !selectedTrip) return;
