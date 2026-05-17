@@ -106,8 +106,8 @@ export default function Navbar() {
                         <p className="text-xs text-gray-500 truncate">{user.email}</p>
                       </div>
                       <div className="p-2 flex flex-col">
-                        <Link href="/dashboard" className="px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 rounded-xl transition-colors text-left font-medium" onClick={() => setDropdownOpen(false)}>
-                          Dashboard
+                        <Link href={user.role === "driver" ? "/driver-dashboard" : "/dashboard"} className="px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 rounded-xl transition-colors text-left font-medium" onClick={() => setDropdownOpen(false)}>
+                          {user.role === "driver" ? "Driver Dashboard" : "Dashboard"}
                         </Link>
                         <button onClick={handleLogout} className="px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-xl transition-colors text-left mt-1 font-medium">
                           Logout
@@ -125,12 +125,14 @@ export default function Navbar() {
           ) : (
             <div className="w-24 h-8"></div>
           )}
-          <Link
-            href="/startbooking"
-            className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-orange-200 hover:bg-orange-600 transition-colors duration-200"
-          >
-            Start Booking →
-          </Link>
+          {(!user || user.role !== "driver") && (
+            <Link
+              href="/startbooking"
+              className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-orange-200 hover:bg-orange-600 transition-colors duration-200"
+            >
+              Start Booking →
+            </Link>
+          )}
         </div>
 
         {/* Mobile hamburger */}

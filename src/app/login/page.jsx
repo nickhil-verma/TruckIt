@@ -35,7 +35,11 @@ export default function Login() {
       localStorage.setItem("user", JSON.stringify(data.user));
 
       toast.success("Welcome back!");
-      router.push("/startbooking");
+      if (data.user.role === "driver") {
+        router.push("/driver-dashboard");
+      } else {
+        router.push("/startbooking");
+      }
     } catch (err) {
       toast.error(err.message);
       setError(err.message);
