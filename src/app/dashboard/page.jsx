@@ -3,11 +3,12 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import toast from "react-hot-toast";
+import { LayoutDashboard, Truck, CheckCircle, MessageSquare, CreditCard, Settings, Search, Check, CheckCheck, Clock } from "lucide-react";
 
 export default function Dashboard() {
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("ongoing"); // "ongoing", "past", "chat", "transactions", "settings"
+  const [activeTab, setActiveTab] = useState("overview"); // "overview", "ongoing", "past", "chat", "transactions", "settings"
   const [selectedTrip, setSelectedTrip] = useState(null);
   
   // Chat specific state
@@ -39,6 +40,13 @@ export default function Dashboard() {
 
   const ongoingTrips = trips.filter(t => ["pending", "accepted", "running"].includes(t.status));
   const pastTrips = trips.filter(t => ["completed", "cancelled"].includes(t.status));
+
+  // Compute stats for overview
+  const totalTrips = trips.length;
+  // Calculate a mock "money saved" metric (e.g. 15% of total spent)
+  const totalSpent = trips.filter(t => t.status === "completed").reduce((acc, curr) => acc + (curr.price || 0), 0);
+  const moneySaved = Math.round(totalSpent * 0.15);
+  const activeCount = ongoingTrips.length;
 
   // --- CHAT LOGIC ---
   const loadMessages = (tripId) => {
@@ -110,11 +118,12 @@ export default function Dashboard() {
               <p className="text-xs uppercase tracking-widest font-bold text-gray-400">Menu</p>
             </div>
             {[
-              { id: "ongoing", label: "Ongoing Trips", icon: "🚚" },
-              { id: "past", label: "Past Trips", icon: "✅" },
-              { id: "chat", label: "Messages", icon: "💬" },
-              { id: "transactions", label: "Transactions", icon: "💳" },
-              { id: "settings", label: "Settings", icon: "⚙️" },
+              { id: "overview", label: "Overview", icon: <LayoutDashboard size={20} /> },
+              { id: "ongoing", label: "Ongoing Trips", icon: <Truck size={20} /> },
+              { id: "past", label: "Past Trips", icon: <CheckCircle size={20} /> },
+              { id: "chat", label: "Messages", icon: <MessageSquare size={20} /> },
+              { id: "transactions", label: "Transactions", icon: <CreditCard size={20} /> },
+              { id: "settings", label: "Settings", icon: <Settings size={20} /> },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -125,7 +134,7 @@ export default function Dashboard() {
                     : "text-gray-600 hover:bg-orange-50 hover:text-orange-600"
                 }`}
               >
-                <span className="text-lg">{tab.icon}</span>
+                {tab.icon}
                 {tab.label}
               </button>
             ))}
@@ -135,6 +144,91 @@ export default function Dashboard() {
         {/* Main Content Area */}
         <div className="flex-1 bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden flex flex-col h-full">
           
+          {/* TAB: OVERVIEW */}
+          {activeTab === "overview" && (
+            <div className="p-8 overflow-y-auto h-full bg-gray-50/30">
+              <h2 className="text-3xl font-extrabold font-serif mb-6 text-gray-900">Dashboard Overview</h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="w-12 h-12 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center">
+                      <Truck size={24} />
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-gray-500 font-medium text-sm mb-1">Total Trips</p>
+                    <h3 className="text-4xl font-extrabold text-gray-900 font-serif">{totalTrips}</h3>
+                  </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow md:col-span-2 relative overflow-hidden group">
+                  <div className="absolute -right-6 -top-6 w-32 h-32 bg-green-500/10 rounded-full blur-2xl group-hover:bg-green-500/20 transition-all"></div>
+                  <div className="flex justify-between items-start mb-4 relative z-10">
+                    <div className="w-12 h-12 bg-green-100 text-green-600 rounded-2xl flex items-center justify-center">
+                      <CreditCard size={24} />
+                    </div>
+                    <span className="bg-green-100 text-green-700 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">Estimated Savings</span>
+                  </div>
+                  <div className="relative z-10">
+                    <p className="text-gray-500 font-medium text-sm mb-1">Money Saved on Logistics</p>
+                    <h3 className="text-4xl font-extrabold text-gray-900 font-serif text-green-600">₹{moneySaved.toLocaleString()}</h3>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 flex flex-col">
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="font-bold text-gray-900 text-lg">Active Transports</h3>
+                    <button onClick={() => setActiveTab("ongoing")} className="text-orange-500 text-sm font-bold hover:underline">View All</button>
+                  </div>
+                  <div className="flex-1 flex flex-col justify-center">
+                    {ongoingTrips.length > 0 ? (
+                      <div className="space-y-4">
+                        {ongoingTrips.slice(0, 3).map(trip => (
+                          <div key={trip._id} className="flex items-center gap-4 p-3 rounded-2xl hover:bg-gray-50 transition-colors">
+                            <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center text-orange-600 shrink-0">
+                              <Truck size={18} />
+                            </div>
+                            <div className="flex-1 truncate">
+                              <p className="font-bold text-gray-900 text-sm truncate">{trip.pickup} → {trip.dropoff}</p>
+                              <p className="text-xs text-gray-500 mt-0.5">{trip.status.toUpperCase()}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center text-gray-400 py-8 flex flex-col items-center">
+                        <Truck size={32} className="mb-2 opacity-20" />
+                        <p>No active transports right now.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-gray-900 rounded-3xl border border-gray-800 shadow-md p-6 text-white flex flex-col relative overflow-hidden group">
+                  <div className="absolute right-0 bottom-0 w-64 h-64 bg-orange-500/20 rounded-full blur-3xl group-hover:bg-orange-500/30 transition-all pointer-events-none"></div>
+                  <div className="relative z-10 flex flex-col h-full">
+                    <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-white mb-6 backdrop-blur-md border border-white/10">
+                      <Search size={24} />
+                    </div>
+                    <div className="mt-auto">
+                      <h3 className="text-2xl font-bold font-serif mb-2">Need a truck?</h3>
+                      <p className="text-gray-400 text-sm mb-6 max-w-xs">Book instantly from our verified network of over 10,000+ drivers pan-India.</p>
+                      <button 
+                        onClick={() => router.push("/startbooking")} 
+                        className="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20"
+                      >
+                        Start Booking Now
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* TAB: ONGOING TRIPS */}
           {activeTab === "ongoing" && (
             <div className="p-8 overflow-y-auto h-full">
@@ -291,10 +385,19 @@ export default function Dashboard() {
                     ) : (
                       messages.map(msg => {
                         const isMe = msg.senderId === user?.id;
+                        const msgTime = msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now";
                         return (
                           <div key={msg._id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
-                            <div className={`max-w-xs md:max-w-md px-4 py-2.5 rounded-2xl text-sm ${isMe ? "bg-orange-500 text-white rounded-br-none shadow-orange-200 shadow-md" : "bg-white text-gray-800 border border-gray-200 rounded-bl-none shadow-sm"}`}>
-                              {msg.text}
+                            <div className={`max-w-xs md:max-w-md px-4 py-2.5 rounded-2xl text-sm flex flex-col ${isMe ? "bg-orange-500 text-white rounded-br-none shadow-orange-200 shadow-md" : "bg-white text-gray-800 border border-gray-200 rounded-bl-none shadow-sm"}`}>
+                              <div>{msg.text}</div>
+                              <div className={`text-[10px] flex items-center gap-1 mt-1 justify-end ${isMe ? "text-orange-100" : "text-gray-400"}`}>
+                                {msgTime}
+                                {isMe && (
+                                  msg.status === "seen" ? <CheckCheck size={12} className="text-blue-200" /> :
+                                  msg.status === "delivered" ? <CheckCheck size={12} /> :
+                                  <Check size={12} />
+                                )}
+                              </div>
                             </div>
                           </div>
                         );
@@ -324,7 +427,7 @@ export default function Dashboard() {
                 </>
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
-                  <div className="text-5xl mb-4">💬</div>
+                  <MessageSquare size={48} className="mb-4 opacity-50" />
                   <p>Select a trip from the dropdown above to start chatting</p>
                 </div>
               )}
