@@ -67,6 +67,52 @@ flowchart TD
 
 ---
 
+## ⚙️ Core Technical Implementation
+
+This section details how the custom high-end systems and safety locks were engineered on the client and server.
+
+### 1. Apple-Style GSAP Pinned Showcase & Theme Transition
+To implement the locked-screen feature showcase, we engineered a dedicated ScrollTrigger timeline. As the user enters the `.gsap-showcase-section` viewport:
+* **The Scroll Lock:** `pin: true` locks the screen vertical scrollbar, scrubbing the timelines at `scrub: 1`.
+* **Conflict-Free Navbar Translation:** To prevent GSAP from overriding the fixed navbar's Tailwind absolute centering class (`-translate-x-1/2`), we animated the CSS `top` style property from `1rem` to `-100px` rather than translating `y`. 
+* **Dynamic Color-Space Morphing:** The background smoothly transitions into deep absolute pitch-black (`#000000`) while all title/description text elements morph to silver and white (`#ffffff` / `#cbd5e1`). Inactive items dim to 20% opacity.
+* **Pre-Exit Theme Restoration:** To guarantee zero sudden layout jumps upon exiting, we appended a reverse-tween at the end of the scrollbar scrub, morphing the section background back to light grey (`#f9fafc`) and restoring all text colors to `#111827` before ScrollTrigger unpins the layout.
+
+### 2. Lightweight Client-Side OCR Driver Verification
+To eliminate heavy backend server processing loads, driver license validation checks run completely inside a **Tesseract.js** browser worker.
+* **Extraction Processing:** 
+  ```javascript
+  import { createWorker } from 'tesseract.js';
+  
+  const worker = await createWorker();
+  await worker.loadLanguage('eng');
+  await worker.initialize('eng');
+  const { data: { text } } = await worker.recognize(licenseImageFile);
+  await worker.terminate();
+  ```
+* **Name Match Validation:** The extracted plain text is sanitized (trimmed, capitalized) and validated against the logged-in profile registration name using string-distance heuristics, confirming the driver's registered account name exactly matches their government ID card before activating their account status.
+* **Verified Tick:** Upon successful match validation, the driver is granted a **Blue Verified Tick Badge** (`✓ Verified Driver`) displayed permanently next to their name in all customer-facing panels.
+
+### 3. Vehicle Credentials Validation (Regex Engine)
+To prevent erroneous registration inputs, vehicle truck and license numbers are filtered through strict regex expressions on state change:
+* **Truck License Plate Pattern:** `^[A-Z]{2}[ -]?[0-9]{2}[ -]?[A-Z]{1,2}[ -]?[0-9]{4}$` (Validates standard regional truck transport registry formats).
+* **Driver License Pattern:** `^[A-Z]{2}[0-9]{13}$` (Enforces standard 15-character regulatory alphanumeric driver licensing keys).
+
+### 4. Interactive Booking Chat & Map Access Controls
+To maximize platform safety, customer-to-driver communications are guarded by live state engines:
+* **Booking State Locks:** The `Track` and `Chat` action keys are completely disabled unless a driver accepts the booking:
+  ```jsx
+  <button 
+    disabled={trip.status !== 'accepted'} 
+    className="disabled:opacity-50 disabled:cursor-not-allowed bg-orange-500 hover:bg-orange-600 ..."
+  >
+    Chat with Driver
+  </button>
+  ```
+* **Dynamic Chat Contexts:** The active message workspace queries historical chats, fetching and displaying the exact driver name dynamically at the top of the chat view header rather than generic placeholder indexes.
+
+---
+
 ## 🛠️ Technology Stack
 
 | Technology | Category | Purpose |
