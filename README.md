@@ -11,6 +11,16 @@
 
 ---
 
+### 🖥️ Application Screenshot Showcase
+
+<p align="center">
+  <img src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=1200&q=80" alt="TruckIt Desktop Booking Dashboard Showcase" width="100%" style="border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 20px 40px -15px rgba(0,0,0,0.1);" />
+  <br>
+  <em>Figure 1: TruckIt premium dynamic tracking dashboard showcase interface (Replace this source URL with your actual booking page screenshot!).</em>
+</p>
+
+---
+
 ## 🗺️ System Design & Architecture
 
 TruckIt is built using a highly decoupled, service-oriented architecture ensuring high performance, responsive maps, and bulletproof security.
