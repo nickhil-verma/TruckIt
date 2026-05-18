@@ -517,9 +517,13 @@ export default function TruckItLanding() {
         <footer className="border-t border-gray-100 py-12 px-4">
           <div className="mx-auto max-w-5xl grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
             <div className="col-span-2 md:col-span-1">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="h-8 w-8 rounded-xl bg-orange-500 flex items-center justify-center text-base">🚛</div>
-                <span className="font-extrabold text-gray-900 tracking-tight">TRUCK<span className="text-orange-500">IT</span></span>
+              <div className="flex items-center mb-3 hover:opacity-90 transition-opacity">
+                <img 
+                  src="/LOGO.png" 
+                  alt="TruckIt Logo" 
+                  className="h-12 w-auto object-contain"
+                  style={{ mixBlendMode: "multiply" }}
+                />
               </div>
               <p className="text-xs text-gray-400 leading-relaxed">
                 India's smartest freight platform. Real trucks, real drivers, real-time tracking.
