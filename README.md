@@ -13,12 +13,28 @@
 
 ### 🖥️ Application Screenshot Showcase
 
-<p align="center">
-  <img src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=1200&q=80" alt="TruckIt Desktop Booking Dashboard Showcase" width="100%" style="border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 20px 40px -15px rgba(0,0,0,0.1);" />
-  <br>
-  <em>Figure 1: TruckIt premium dynamic tracking dashboard showcase interface (Replace this source URL with your actual booking page screenshot!).</em>
-</p>
+<img width="2854" height="1286" alt="Screenshot 2026-05-18 212252" src="https://github.com/user-attachments/assets/fbabb5e3-c178-48b8-85cf-f957711a6480" />
 
+<img width="2868" height="1384" alt="Screenshot 2026-05-18 212318" src="https://github.com/user-attachments/assets/4ee3d430-1201-4324-abd2-76186f5e6283" />
+
+<img width="2846" height="1340" alt="Screenshot 2026-05-18 212330" src="https://github.com/user-attachments/assets/1987c3b7-67bb-4c7c-94f0-cb3182030734" />
+
+<img width="2838" height="1356" alt="Screenshot 2026-05-18 212343" src="https://github.com/user-attachments/assets/45ebbc54-84b7-439c-a899-eb793658d3e7" />
+
+<img width="2832" height="1354" alt="Screenshot 2026-05-18 212356" src="https://github.com/user-attachments/assets/7466141e-f8cb-45a8-8f58-6fd48b26553e" />
+
+<img width="2456" height="1400" alt="Screenshot 2026-05-18 212426" src="https://github.com/user-attachments/assets/6f1bd03b-3016-4926-94c6-10d2e1fbca8c" />
+
+<img width="2814" height="1350" alt="Screenshot 2026-05-18 212456" src="https://github.com/user-attachments/assets/e1a2440b-e349-417a-a6ef-c8c537b32482" />
+
+<img width="2852" height="1296" alt="Screenshot 2026-05-18 212523" src="https://github.com/user-attachments/assets/d17ba485-3460-4506-b8f1-12c92d8948e4" />
+
+<img width="2864" height="1292" alt="Screenshot 2026-05-18 212534" src="https://github.com/user-attachments/assets/5a3f21cf-79b2-422c-acc8-0f225f2c501a" />
+
+<img width="2846" height="1288" alt="Screenshot 2026-05-18 212549" src="https://github.com/user-attachments/assets/e3a815df-677b-40e1-bf20-92a42997645e" />
+
+
+ 
 ---
 
 ## 🗺️ System Design & Architecture
