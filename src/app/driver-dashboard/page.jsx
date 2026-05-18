@@ -69,6 +69,16 @@ export default function DriverDashboard() {
   const [user, setUser] = useState(null);
   const [postedRoutes, setPostedRoutes] = useState([]);
   
+  // Settings specific state
+  const [settingsName, setSettingsName] = useState("");
+  const [settingsLocation, setSettingsLocation] = useState("");
+  const [settingsTruckNumber, setSettingsTruckNumber] = useState("");
+  const [settingsLicenseNumber, setSettingsLicenseNumber] = useState("");
+  const [ocrText, setOcrText] = useState("");
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrNameMatched, setOcrNameMatched] = useState(null); // null, true, false
+  const [ocrProgress, setOcrProgress] = useState("");
+  
   // Geocoding and routing states for driver route posts (Click to Route)
   const [driverPointA, setDriverPointA] = useState(null); // { name, lat, lon }
   const [driverPointB, setDriverPointB] = useState(null); // { name, lat, lon }
@@ -132,6 +142,10 @@ export default function DriverDashboard() {
       return;
     }
     setUser(storedUser);
+    setSettingsName(storedUser.name || "");
+    setSettingsLocation(storedUser.location || "");
+    setSettingsTruckNumber(storedUser.truckNumber || "");
+    setSettingsLicenseNumber(storedUser.licenseNumber || "");
     fetchTrips(token);
   }, [router]);
 
@@ -470,6 +484,122 @@ export default function DriverDashboard() {
     calculateRoute();
   }, [driverPointA, driverPointB, driverStopsList]);
 
+  const handleOcr = async (file) => {
+    if (!file) return;
+    setOcrLoading(true);
+    setOcrNameMatched(null);
+    setOcrText("");
+    setOcrProgress("Starting OCR Engine...");
+
+    try {
+      const { createWorker } = await import("tesseract.js");
+      const worker = await createWorker("eng");
+      
+      setOcrProgress("Analyzing license image...");
+      const { data: { text } } = await worker.recognize(file);
+      await worker.terminate();
+
+      setOcrText(text);
+
+      const cleanOcrText = text.toLowerCase().replace(/[^a-z0-9]/g, " ");
+      const cleanName = settingsName.toLowerCase().trim();
+
+      const nameParts = cleanName.split(/\s+/).filter(part => part.length > 2);
+      
+      let isMatch = false;
+      if (nameParts.length > 0) {
+        isMatch = nameParts.every(part => cleanOcrText.includes(part));
+      }
+
+      if (isMatch) {
+        setOcrNameMatched(true);
+        toast.success("License name matched successfully!");
+      } else {
+        setOcrNameMatched(false);
+        toast.error("Name in driving license does not match registered name.");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("OCR analysis failed. Please try a clearer image.");
+      setOcrProgress("Failed to read image");
+    } finally {
+      setOcrLoading(false);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    if (!settingsName) {
+      toast.error("Name is required");
+      return;
+    }
+    const cleanTruck = settingsTruckNumber.replace(/\s+/g, "").toUpperCase();
+    const truckRegex = /^[A-Z]{2}[0-9]{2}[A-Z]{1,2}[0-9]{4}$/;
+    if (!truckRegex.test(cleanTruck)) {
+      toast.error("Invalid Indian Truck Number format (e.g. MH12AB1234)");
+      return;
+    }
+
+    const cleanLicense = settingsLicenseNumber.replace(/\s+/g, "").toUpperCase();
+    const licenseRegex = /^[A-Z]{2}[0-9]{2}[0-9]{11}$/;
+    if (!licenseRegex.test(cleanLicense)) {
+      toast.error("Invalid Driving License format (e.g. MH1220180001234)");
+      return;
+    }
+
+    if (ocrNameMatched === false) {
+      toast.error("Cannot save settings. Name on Driving License does not match registered name!");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: settingsName,
+          location: settingsLocation,
+          truckNumber: settingsTruckNumber,
+          licenseNumber: settingsLicenseNumber
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        toast.success("Settings saved successfully!");
+        localStorage.setItem("user", JSON.stringify(data.user));
+        setUser(data.user);
+      } else {
+        toast.error(data.error || "Failed to save settings");
+      }
+    } catch (err) {
+      toast.error("Network error saving settings");
+    }
+  };
+
+  const handleDeleteRoutePost = async (postId) => {
+    if (!confirm("Are you sure you want to delete this posted route?")) return;
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`/api/route-posts?id=${postId}`, {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        toast.success("Empty return route deleted successfully");
+        setPostedRoutes(prev => prev.filter(r => r._id !== postId));
+      } else {
+        const data = await res.json();
+        toast.error(data.error || "Failed to delete route");
+      }
+    } catch (err) {
+      toast.error("Error deleting route");
+    }
+  };
+
   const handlePostRoute = async (e) => {
     e.preventDefault();
     if (!driverPointA || !driverPointB || !routeForm.date) {
@@ -800,14 +930,76 @@ export default function DriverDashboard() {
                     <form onSubmit={handlePostRoute} className="space-y-4">
                       
                       <div>
-                        <label className="block text-[10px] font-black text-gray-600 uppercase tracking-wider mb-1">Asking Return Fare (₹)</label>
-                        <input 
-                          type="number" 
-                          value={routeForm.price} 
-                          onChange={e => setRouteForm({...routeForm, price: e.target.value})} 
-                          placeholder={driverDistance ? `Auto Price: ₹${Math.round(driverDistance * 12)}` : "Enter custom fare"} 
-                          className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-xs font-semibold" 
-                        />
+                        <label className="block text-[10px] font-black text-gray-600 uppercase tracking-wider mb-3">Asking Return Fare (₹)</label>
+                        {(() => {
+                          const standardFare = driverDistance ? Math.round(driverDistance * 12) : 5000;
+                          const minFare = Math.round(standardFare * 0.5);
+                          const maxFare = Math.round(standardFare * 1.5);
+                          const currentFare = routeForm.price ? Number(routeForm.price) : standardFare;
+
+                          let sliderColor = "#eab308";
+                          if (currentFare < standardFare) {
+                            const ratio = (standardFare - currentFare) / (standardFare - minFare);
+                            const l = 73 - (ratio * (73 - 36));
+                            sliderColor = `hsl(142, 71%, ${l}%)`;
+                          } else if (currentFare > standardFare) {
+                            const ratio = (currentFare - standardFare) / (maxFare - standardFare);
+                            const h = 25 - (ratio * 25);
+                            sliderColor = `hsl(${h}, 95%, 53%)`;
+                          }
+
+                          return (
+                            <div className="flex flex-col gap-2 bg-slate-50 p-4 rounded-xl border border-gray-100 relative">
+                              <div className="flex justify-between items-end text-xs font-semibold mb-2">
+                                <span className="text-gray-400 font-bold">Min: ₹{minFare}</span>
+                                <div className="text-center flex flex-col items-center">
+                                  <span className="text-[10px] uppercase font-bold text-gray-400 mb-0.5 tracking-wider">Your Price</span>
+                                  <span className="font-black text-xl" style={{ color: sliderColor }}>₹{currentFare}</span>
+                                </div>
+                                <span className="text-gray-400 font-bold">Max: ₹{maxFare}</span>
+                              </div>
+                              <input 
+                                type="range" 
+                                min={minFare} 
+                                max={maxFare} 
+                                step="100"
+                                value={currentFare} 
+                                onChange={e => setRouteForm({...routeForm, price: e.target.value})} 
+                                className="w-full h-2 rounded-lg appearance-none cursor-pointer fare-slider" 
+                                style={{
+                                  background: `linear-gradient(to right, ${sliderColor} ${((currentFare - minFare) / (maxFare - minFare)) * 100}%, #e2e8f0 ${((currentFare - minFare) / (maxFare - minFare)) * 100}%)`,
+                                }}
+                              />
+                              <style>{`
+                                .fare-slider::-webkit-slider-thumb {
+                                  -webkit-appearance: none;
+                                  appearance: none;
+                                  width: 22px;
+                                  height: 22px;
+                                  border-radius: 50%;
+                                  background: white;
+                                  border: 4px solid ${sliderColor};
+                                  cursor: pointer;
+                                  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+                                }
+                                .fare-slider::-moz-range-thumb {
+                                  width: 22px;
+                                  height: 22px;
+                                  border-radius: 50%;
+                                  background: white;
+                                  border: 4px solid ${sliderColor};
+                                  cursor: pointer;
+                                  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+                                }
+                              `}</style>
+                              <div className="text-center mt-2">
+                                {currentFare === standardFare && <span className="text-[10px] font-bold text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded-md">Standard Fare</span>}
+                                {currentFare < standardFare && <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-md">Competitive Fare</span>}
+                                {currentFare > standardFare && <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-md">Premium Fare</span>}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       <div>
@@ -917,9 +1109,16 @@ export default function DriverDashboard() {
                             )}
                             <p className="text-[11px] text-gray-550 mt-2 font-semibold text-orange-600">Fleet: {route.truckType}</p>
                           </div>
-                          <div className="mt-4 border-t border-gray-50 pt-3 flex justify-between items-center">
-                            <span className="text-[11px] text-gray-400 font-bold uppercase tracking-wider">Asking Fare</span>
-                            <span className="text-base font-black text-gray-900">₹{route.price.toLocaleString()}</span>
+                          <div className="mt-4 border-t border-gray-50 pt-3 flex flex-col gap-3">
+                            <div className="flex justify-between items-center">
+                              <span className="text-[11px] text-gray-400 font-bold uppercase tracking-wider">Asking Fare</span>
+                              <span className="text-base font-black text-gray-900">₹{route.price.toLocaleString()}</span>
+                            </div>
+                            {route.status === "active" && (
+                              <button onClick={() => handleDeleteRoutePost(route._id)} className="w-full py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-xs font-bold transition-colors border border-red-100">
+                                Cancel Post
+                              </button>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -1027,27 +1226,105 @@ export default function DriverDashboard() {
 
           {/* TAB: SETTINGS */}
           {activeTab === "settings" && (
-            <div className="p-8 overflow-y-auto h-full max-w-2xl">
+            <div className="p-8 overflow-y-auto h-full max-w-2xl bg-white rounded-3xl border border-gray-100 shadow-sm">
               <h2 className="text-3xl font-extrabold font-serif mb-6 text-gray-900">Driver Settings</h2>
               
               <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Full Name</label>
-                  <input type="text" defaultValue={user?.name} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm" />
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Full Name</label>
+                  <span className="text-[11px] text-gray-400 block mb-2 font-medium">⚠️ Keep your name exactly the same as given in your Govt ID card / Driving License.</span>
+                  <input 
+                    type="text" 
+                    value={settingsName} 
+                    onChange={e => setSettingsName(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm font-semibold" 
+                  />
                 </div>
                 
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-2">Email Address</label>
-                  <input type="email" disabled defaultValue={user?.email} className="w-full px-4 py-3 rounded-xl border border-gray-100 bg-gray-50 text-gray-500 cursor-not-allowed text-sm" />
+                  <input type="email" disabled defaultValue={user?.email} className="w-full px-4 py-3 rounded-xl border border-gray-100 bg-gray-50 text-gray-500 cursor-not-allowed text-sm font-semibold" />
                 </div>
 
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-2">Base Location / Route</label>
-                  <input type="text" defaultValue={user?.location || ""} placeholder="e.g. Mumbai, India" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm" />
+                  <input 
+                    type="text" 
+                    value={settingsLocation} 
+                    onChange={e => setSettingsLocation(e.target.value)}
+                    placeholder="e.g. Mumbai, India" 
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm font-semibold" 
+                  />
                 </div>
 
-                <button onClick={() => toast.success("Settings saved successfully!")} className="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold shadow-md hover:bg-gray-800 transition-colors">
-                  Save Changes
+                <div className="border-t border-gray-100 my-4 pt-4">
+                  <h3 className="font-bold text-gray-900 text-base mb-3">Verification Details</h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 mb-1">Truck Number</label>
+                      <input 
+                        type="text" 
+                        value={settingsTruckNumber} 
+                        onChange={e => setSettingsTruckNumber(e.target.value)}
+                        placeholder="e.g. MH12AB1234" 
+                        className="w-full px-3 py-2.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-xs uppercase font-semibold" 
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 mb-1">Driving License Number</label>
+                      <input 
+                        type="text" 
+                        value={settingsLicenseNumber} 
+                        onChange={e => setSettingsLicenseNumber(e.target.value)}
+                        placeholder="e.g. MH1220180001234" 
+                        className="w-full px-3 py-2.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-xs uppercase font-semibold" 
+                      />
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 p-4 rounded-xl border border-gray-100 flex flex-col gap-3">
+                    <label className="block text-xs font-bold text-gray-700">Upload Driving License (Govt ID card)</label>
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      onChange={e => {
+                        const file = e.target.files[0];
+                        if (file) handleOcr(file);
+                      }}
+                      className="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 cursor-pointer"
+                    />
+
+                    {ocrLoading && (
+                      <div className="flex items-center gap-2 text-xs font-semibold text-orange-600">
+                        <span className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></span>
+                        <span>{ocrProgress}</span>
+                      </div>
+                    )}
+
+                    {!ocrLoading && ocrNameMatched !== null && (
+                      <div className={`text-xs font-bold p-3 rounded-lg border ${ocrNameMatched ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                        {ocrNameMatched ? (
+                          <span>✅ OCR Match Success: Name matches registered name!</span>
+                        ) : (
+                          <span>❌ OCR Match Failure: Name in Driving License did not match your registered name. Please update your registered Name at the top to match.</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <button 
+                  onClick={handleSaveSettings} 
+                  disabled={ocrLoading || ocrNameMatched === false}
+                  className={`w-full py-3.5 rounded-2xl font-bold text-xs uppercase tracking-wider transition-colors shadow-md ${
+                    (ocrLoading || ocrNameMatched === false) 
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none' 
+                      : 'bg-gray-900 text-white hover:bg-gray-800 shadow-gray-200 cursor-pointer'
+                  }`}
+                >
+                  Save Verification & Profile
                 </button>
               </div>
             </div>
@@ -1066,160 +1343,174 @@ export default function DriverDashboard() {
             });
 
             return (
-              <div className="flex flex-col h-full bg-slate-50">
-                <div className="px-6 py-4 border-b border-gray-100 bg-white flex justify-between items-center z-10 shrink-0">
-                  <div>
-                    <h3 className="font-bold text-gray-900 font-serif text-lg">
-                      Customer Chat
-                    </h3>
-                    <div className="flex flex-wrap gap-3 mt-2">
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Select customer load</label>
-                        <select 
-                          className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 outline-none bg-white text-gray-750 font-semibold"
-                          onChange={(e) => setSelectedTrip(trips.find(t => t._id === e.target.value))}
-                          value={selectedTrip?._id || ""}
-                        >
-                          <option value="" disabled>Select a trip</option>
-                          {sortedChatTrips.map(t => (
-                            <option key={t._id} value={t._id}>
-                              {t.pickup.split(',')[0]} → {t.dropoff.split(',')[0]} ({t.userId?.name || "No User"}) {t.status === 'completed' ? '✅ Done' : ''}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Sort list by</label>
-                        <select
-                          className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 outline-none bg-white text-gray-755 font-semibold cursor-pointer"
-                          onChange={(e) => setChatSortBy(e.target.value)}
-                          value={chatSortBy}
-                        >
-                          <option value="date">📅 Date (Newest first)</option>
-                          <option value="name">👤 Customer Name</option>
-                        </select>
-                      </div>
-                    </div>
+              <div className="flex flex-1 overflow-hidden h-full">
+                {/* Left Column: Conversations List */}
+                <div className="w-80 border-r border-gray-100 flex flex-col bg-white overflow-y-auto shrink-0 animate-fade-in">
+                  <div className="p-4 border-b border-gray-50 flex justify-between items-center">
+                    <h3 className="font-extrabold text-gray-900 text-xs uppercase tracking-wider">Your Conversations</h3>
+                    <select
+                      className="text-[10px] border border-gray-200 rounded px-1.5 py-0.5 outline-none bg-white text-gray-500 font-semibold cursor-pointer"
+                      onChange={(e) => setChatSortBy(e.target.value)}
+                      value={chatSortBy}
+                    >
+                      <option value="date">📅 Date</option>
+                      <option value="name">👤 Name</option>
+                    </select>
                   </div>
+                  {sortedChatTrips.length === 0 ? (
+                    <div className="text-center py-10 text-gray-400 text-xs">No active chats found.</div>
+                  ) : (
+                    <div className="divide-y divide-gray-50">
+                      {sortedChatTrips.map(t => {
+                        const isActive = selectedTrip?._id === t._id;
+                        return (
+                          <button
+                            key={t._id}
+                            onClick={() => setSelectedTrip(t)}
+                            className={`w-full text-left p-4 hover:bg-slate-50 transition-colors flex flex-col gap-1.5 ${isActive ? "bg-orange-50/50 border-l-4 border-orange-500" : ""}`}
+                          >
+                            <div className="flex justify-between items-start">
+                              <span className="font-bold text-gray-900 text-sm">{t.userId?.name || "Customer"}</span>
+                              <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${t.status === 'completed' ? 'bg-green-150 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                                {t.status}
+                              </span>
+                            </div>
+                            <p className="text-xs text-gray-500 font-semibold truncate">{t.pickup.split(',')[0]} → {t.dropoff.split(',')[0]}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
-                {selectedTrip ? (
-                  <>
-                    <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                      {messages.length === 0 ? (
-                        <div className="text-center text-gray-400 mt-10 text-sm bg-white p-4 rounded-xl border border-gray-100 inline-block mx-auto">
-                          Say hello to your customer and coordinate the pickup!
+                {/* Right Column: Chat Content */}
+                <div className="flex-1 flex flex-col bg-slate-50/50 h-full overflow-hidden">
+                  {selectedTrip ? (
+                    <>
+                      <div className="px-6 py-4 border-b border-gray-100 bg-white flex justify-between items-center z-10 shrink-0">
+                        <div>
+                          <h3 className="font-extrabold text-gray-900 text-base">
+                            Chat with Customer: {selectedTrip?.userId?.name || "Customer"}
+                          </h3>
+                          <p className="text-[10px] text-gray-450 font-bold uppercase tracking-wider mt-0.5">{selectedTrip.pickup.split(',')[0]} → {selectedTrip.dropoff.split(',')[0]}</p>
                         </div>
-                      ) : (
-                        messages.map(msg => {
-                          const isMe = msg.senderId === user?.id;
-                          const msgTime = msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now";
-                          return (
-                            <div key={msg._id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
-                              <div className={`max-w-xs md:max-w-md px-4 py-2.5 rounded-2xl text-sm flex flex-col ${isMe ? "bg-orange-500 text-white rounded-br-none shadow-orange-200 shadow-md" : "bg-white text-gray-800 border border-gray-200 rounded-bl-none shadow-sm"}`}>
-                                <div>{msg.text}</div>
-                                <div className={`text-[10px] flex items-center gap-1 mt-1 justify-end ${isMe ? "text-orange-100" : "text-gray-400"}`}>
-                                  {msgTime}
-                                  {isMe && (
-                                    msg.status === "seen" ? <CheckCheck size={12} className="text-blue-200" /> :
-                                    msg.status === "delivered" ? <CheckCheck size={12} /> :
-                                    <Check size={12} />
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-                      <div ref={messagesEndRef} />
-                    </div>
+                      </div>
 
-                    {/* Chat Input or Closed Chat Feedback Form */}
-                    {selectedTrip.status === "completed" ? (
-                      <div className="p-6 bg-white border-t border-gray-100 shrink-0 flex flex-col gap-4">
-                        <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-4 text-center max-w-xl mx-auto w-full">
-                          <span className="text-xl">✅</span>
-                          <h4 className="font-bold text-gray-900 text-sm mt-1">This job is completed!</h4>
-                          <p className="text-xs text-gray-500 mt-0.5 font-medium">The chat session has ended. Share your feedback on the client/receiver below.</p>
-                        </div>
-
-                        {/* Review / Feedback Section */}
-                        {selectedTrip.driverRating !== undefined && selectedTrip.driverRating !== null ? (
-                          <div className="text-center max-w-xl mx-auto w-full p-5 bg-emerald-50/50 border border-emerald-100 rounded-2xl">
-                            <p className="text-xs font-black text-emerald-850">🎉 Thank you! Your feedback on the customer has been recorded successfully.</p>
-                            <div className="flex justify-center items-center gap-1.5 mt-2">
-                              <span className="text-xs font-semibold text-gray-600">Your Rating:</span>
-                              <span className="text-sm font-black text-amber-500">{"★".repeat(selectedTrip.driverRating)}{"☆".repeat(5 - selectedTrip.driverRating)}</span>
-                              <span className="text-xs font-bold text-gray-500">({selectedTrip.driverRating} / 5)</span>
-                            </div>
-                            {selectedTrip.driverReview && (
-                              <p className="text-xs text-gray-500 italic mt-3 bg-white/70 py-2 px-3 rounded-xl border border-emerald-100/50">"{selectedTrip.driverReview}"</p>
-                            )}
+                      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                        {messages.length === 0 ? (
+                          <div className="text-center text-gray-400 mt-10 text-sm bg-white p-4 rounded-xl border border-gray-100 inline-block mx-auto">
+                            Say hello to your customer and coordinate the pickup!
                           </div>
                         ) : (
-                          <div className="max-w-xl mx-auto w-full bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-                            <h5 className="font-bold text-gray-800 text-xs uppercase tracking-wide mb-3">Rate your Customer ({selectedTrip.userId?.name || "Customer"})</h5>
-                            
-                            <div className="flex gap-2.5 mb-4">
-                              {[1, 2, 3, 4, 5].map((stars) => (
-                                <button
-                                  key={stars}
-                                  type="button"
-                                  onClick={() => setReviewRating(stars)}
-                                  className={`text-2xl transition-all ${
-                                    reviewRating >= stars ? "text-amber-500 scale-110" : "text-gray-200 hover:text-amber-400"
-                                  }`}
-                                >
-                                  ★
-                              </button>
-                              ))}
-                            </div>
-
-                            <textarea
-                              value={reviewText}
-                              onChange={(e) => setReviewText(e.target.value)}
-                              placeholder="Write a brief review about the pickup process readiness, weight specifications correctness, and payments speed..."
-                              rows={3}
-                              className="w-full p-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-xs mb-3 resize-none font-medium"
-                            />
-
-                            <button
-                              onClick={submitDriverReview}
-                              className="w-full bg-orange-500 text-white font-bold py-2.5 rounded-xl text-xs hover:bg-orange-600 transition-colors shadow-md shadow-orange-100"
-                            >
-                              Submit Review & Rating
-                            </button>
-                          </div>
+                          messages.map(msg => {
+                            const isMe = msg.senderId === user?.id;
+                            const msgTime = msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now";
+                            return (
+                              <div key={msg._id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                                <div className={`max-w-xs md:max-w-md px-4 py-2.5 rounded-2xl text-sm flex flex-col ${isMe ? "bg-orange-500 text-white rounded-br-none shadow-orange-200 shadow-md" : "bg-white text-gray-800 border border-gray-200 rounded-bl-none shadow-sm"}`}>
+                                  <div>{msg.text}</div>
+                                  <div className={`text-[10px] flex items-center gap-1 mt-1 justify-end ${isMe ? "text-orange-100" : "text-gray-400"}`}>
+                                    {msgTime}
+                                    {isMe && (
+                                      msg.status === "seen" ? <CheckCheck size={12} className="text-blue-200" /> :
+                                      msg.status === "delivered" ? <CheckCheck size={12} /> :
+                                      <Check size={12} />
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })
                         )}
+                        <div ref={messagesEndRef} />
                       </div>
-                    ) : (
-                      /* Chat Input */
-                      <div className="p-4 bg-white border-t border-gray-100 shrink-0">
-                        <form onSubmit={sendMessage} className="flex gap-3 max-w-4xl mx-auto">
-                          <input
-                            type="text"
-                            value={text}
-                            onChange={e => setText(e.target.value)}
-                            placeholder="Type your message..."
-                            className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
-                          />
-                          <button 
-                            type="submit"
-                            className="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold shadow-md shadow-orange-200 hover:bg-orange-600 transition-colors"
-                          >
-                            Send
-                          </button>
-                        </form>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
-                    <MessageSquare size={48} className="mb-4 opacity-50" />
-                    <p>Select an active or completed trip to coordinate or submit feedback</p>
-                  </div>
-                )}
+
+                      {/* Chat Input or Closed Chat Feedback Form */}
+                      {selectedTrip.status === "completed" ? (
+                        <div className="p-6 bg-white border-t border-gray-100 shrink-0 flex flex-col gap-4">
+                          <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-4 text-center max-w-xl mx-auto w-full">
+                            <span className="text-xl">✅</span>
+                            <h4 className="font-bold text-gray-900 text-sm mt-1">This job is completed!</h4>
+                            <p className="text-xs text-gray-500 mt-0.5 font-medium">The chat session has ended. Share your feedback on the client/receiver below.</p>
+                          </div>
+
+                          {/* Review / Feedback Section */}
+                          {selectedTrip.driverRating !== undefined && selectedTrip.driverRating !== null ? (
+                            <div className="text-center max-w-xl mx-auto w-full p-5 bg-emerald-50/50 border border-emerald-100 rounded-2xl">
+                              <p className="text-xs font-black text-emerald-850">🎉 Thank you! Your feedback on the customer has been recorded successfully.</p>
+                              <div className="flex justify-center items-center gap-1.5 mt-2">
+                                <span className="text-xs font-semibold text-gray-600">Your Rating:</span>
+                                <span className="text-sm font-black text-amber-500">{"★".repeat(selectedTrip.driverRating)}{"☆".repeat(5 - selectedTrip.driverRating)}</span>
+                                <span className="text-xs font-bold text-gray-500">({selectedTrip.driverRating} / 5)</span>
+                              </div>
+                              {selectedTrip.driverReview && (
+                                <p className="text-xs text-gray-500 italic mt-3 bg-white/70 py-2 px-3 rounded-xl border border-emerald-100/50">"{selectedTrip.driverReview}"</p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="max-w-xl mx-auto w-full bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+                              <h5 className="font-bold text-gray-800 text-xs uppercase tracking-wide mb-3">Rate your Customer ({selectedTrip.userId?.name || "Customer"})</h5>
+                              
+                              <div className="flex gap-2.5 mb-4">
+                                {[1, 2, 3, 4, 5].map((stars) => (
+                                  <button
+                                    key={stars}
+                                    type="button"
+                                    onClick={() => setReviewRating(stars)}
+                                    className={`text-2xl transition-all ${
+                                      reviewRating >= stars ? "text-amber-500 scale-110" : "text-gray-200 hover:text-amber-400"
+                                    }`}
+                                  >
+                                    ★
+                                  </button>
+                                ))}
+                              </div>
+
+                              <textarea
+                                value={reviewText}
+                                onChange={(e) => setReviewText(e.target.value)}
+                                placeholder="Write a brief review about the pickup process readiness, weight specifications correctness, and payments speed..."
+                                rows={3}
+                                className="w-full p-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-xs mb-3 resize-none font-medium"
+                              />
+
+                              <button
+                                onClick={submitDriverReview}
+                                className="w-full bg-orange-500 text-white font-bold py-2.5 rounded-xl text-xs hover:bg-orange-600 transition-colors shadow-md shadow-orange-100"
+                              >
+                                Submit Review & Rating
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        /* Chat Input */
+                        <div className="p-4 bg-white border-t border-gray-100 shrink-0">
+                          <form onSubmit={sendMessage} className="flex gap-3 max-w-4xl mx-auto">
+                            <input
+                              type="text"
+                              value={text}
+                              onChange={e => setText(e.target.value)}
+                              placeholder="Type your message..."
+                              className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                            />
+                            <button 
+                              type="submit"
+                              className="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold shadow-md shadow-orange-200 hover:bg-orange-600 transition-colors"
+                            >
+                              Send
+                            </button>
+                          </form>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
+                      <MessageSquare size={48} className="mb-4 opacity-50" />
+                      <p className="text-sm font-semibold">Select a conversation from the left to start chatting</p>
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })()}

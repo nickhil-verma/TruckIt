@@ -158,6 +158,7 @@ export default function TruckItApp() {
   const [bookingLoading, setBookingLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showReceipt, setShowReceipt] = useState(false);
+  const [selectedViaStops, setSelectedViaStops] = useState([]);
   
   // Empty routes logic
   const [bookingMode, setBookingMode] = useState("fresh"); // "fresh", "empty"
@@ -193,6 +194,9 @@ export default function TruckItApp() {
     setCoordA(null);
     setCoordB(null);
     setBooked(false);
+    if (bookingMode !== "empty") {
+      setSelectedViaStops([]);
+    }
     try {
       const [a, b] = await Promise.all([geocode(from), geocode(to)]);
       if (!a) throw new Error(`Could not find: "${from}"`);
@@ -239,7 +243,8 @@ export default function TruckItApp() {
           dropoff: to,
           truckType: selectedTruckData.label,
           price: totalPrice,
-          distance: distanceKm
+          distance: distanceKm,
+          viaStops: selectedViaStops
         }),
       });
 
@@ -475,6 +480,7 @@ export default function TruckItApp() {
                               setFrom(route.origin);
                               setTo(route.destination);
                               setSelectedTruck(route.truckType);
+                              setSelectedViaStops(route.viaStops || []);
                               setTimeout(() => handleSearch(), 100);
                             }}
                             style={{
@@ -484,6 +490,11 @@ export default function TruckItApp() {
                             <div style={{ fontSize: "24px" }}>{truckTypeObj.icon}</div>
                             <div style={{ flex: 1 }}>
                               <div style={{ fontWeight: 600, fontSize: "13px", color: "#166534" }}>{route.origin} → {route.destination}</div>
+                              {route.viaStops && route.viaStops.length > 0 && (
+                                <div style={{ fontSize: "11px", color: "#16a34a", marginTop: "2px", fontWeight: 500 }}>
+                                  Via: {route.viaStops.join(" → ")}
+                                </div>
+                              )}
                               <div style={{ fontSize: "11px", color: "#15803d", marginTop: "2px" }}>Date: {route.date}</div>
                             </div>
                             <div style={{ fontSize: "11px", fontWeight: 700, color: "#16a34a", background: "#dcfce7", padding: "4px 8px", borderRadius: "20px" }}>40% OFF</div>
@@ -732,6 +743,12 @@ export default function TruckItApp() {
                   <span className="text-gray-400 font-medium">Dropoff Location</span>
                   <span className="text-gray-950 font-bold text-right max-w-[70%] truncate">{to}</span>
                 </div>
+                {selectedViaStops && selectedViaStops.length > 0 && (
+                  <div className="flex justify-between text-xs sm:text-sm">
+                    <span className="text-gray-400 font-medium">Via Stops</span>
+                    <span className="text-green-600 font-bold text-right max-w-[70%] truncate">{selectedViaStops.join(" → ")}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-xs sm:text-sm">
                   <span className="text-gray-400 font-medium">Total Distance</span>
                   <span className="text-gray-950 font-bold">{distanceKm ? distanceKm.toFixed(1) : 0} km</span>

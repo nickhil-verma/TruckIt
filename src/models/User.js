@@ -10,6 +10,10 @@ const UserSchema = new mongoose.Schema({
   avatar: { type: String },
   rating: { type: Number, default: 5.0 },
   experience: { type: String },
+  truckNumber: { type: String },
+  licenseNumber: { type: String },
+  tripsDone: { type: Number, default: 0 },
+  reviewsCount: { type: Number, default: 0 },
 }, { timestamps: true });
 
 export default mongoose.models.User || mongoose.model("User", UserSchema);

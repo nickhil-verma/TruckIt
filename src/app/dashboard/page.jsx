@@ -12,6 +12,7 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("overview"); // "overview", "ongoing", "past", "chat", "transactions", "settings"
   const [selectedTrip, setSelectedTrip] = useState(null);
   const [selectedInvoiceTrip, setSelectedInvoiceTrip] = useState(null);
+  const [selectedDriverProfile, setSelectedDriverProfile] = useState(null);
   
   // Chat specific state
   const [messages, setMessages] = useState([]);
@@ -44,6 +45,26 @@ export default function Dashboard() {
 
   const ongoingTrips = trips.filter(t => ["pending", "accepted", "running"].includes(t.status));
   const pastTrips = trips.filter(t => ["completed", "cancelled"].includes(t.status));
+
+  const handleDeleteTrip = async (tripId) => {
+    if (!confirm("Are you sure you want to cancel this request?")) return;
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`/api/trips?id=${tripId}`, {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        toast.success("Trip request cancelled");
+        setTrips(prev => prev.filter(t => t._id !== tripId));
+      } else {
+        const data = await res.json();
+        toast.error(data.error || "Failed to cancel trip");
+      }
+    } catch (err) {
+      toast.error("Error cancelling trip");
+    }
+  };
 
   // Compute stats for overview
   const totalTrips = trips.length;
@@ -328,11 +349,26 @@ export default function Dashboard() {
                             </div>
                             <div className="flex-1 truncate">
                               <p className="font-bold text-gray-900 text-sm truncate">{trip.pickup} → {trip.dropoff}</p>
+                              {trip.viaStops && trip.viaStops.length > 0 && (
+                                <p className="text-[10px] text-green-600 font-bold mt-0.5 truncate">Via: {trip.viaStops.join(" → ")}</p>
+                              )}
                               <div className="flex items-center gap-2 mt-0.5">
                                 <span className={`text-[9px] uppercase font-black px-1.5 py-0.5 rounded ${trip.status === 'pending' ? 'bg-yellow-100 text-yellow-755 font-bold' : 'bg-green-100 text-green-700 font-bold'}`}>
                                   {trip.status}
                                 </span>
-                                {trip.driverId && <span className="text-[10px] text-gray-400 font-medium">Driver: {trip.driverId.name}</span>}
+                                {trip.driverId && (
+                                  <button
+                                    onClick={() => setSelectedDriverProfile(trip.driverId)}
+                                    className="text-[10px] text-gray-400 font-medium flex items-center gap-1 hover:underline cursor-pointer focus:outline-none"
+                                  >
+                                    Driver: {trip.driverId.name}
+                                    {trip.driverId.truckNumber && trip.driverId.licenseNumber && (
+                                      <span className="inline-flex items-center justify-center w-3 h-3 rounded-full bg-blue-500 text-white" title="Verified Driver">
+                                        <Check size={7} strokeWidth={4} />
+                                      </span>
+                                    )}
+                                  </button>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -385,26 +421,60 @@ export default function Dashboard() {
                           <span className="text-sm font-bold text-gray-400">ID: {trip._id.slice(-6).toUpperCase()}</span>
                         </div>
                         <h3 className="font-bold text-lg text-gray-900">{trip.pickup} <span className="text-orange-500">→</span> {trip.dropoff}</h3>
+                        {trip.viaStops && trip.viaStops.length > 0 && (
+                          <p className="text-xs text-green-600 font-bold mt-1">Via: {trip.viaStops.join(" → ")}</p>
+                        )}
                         <p className="text-sm text-gray-500 mt-1">{trip.truckType} · {trip.distance} km</p>
                         {trip.driverId && (
-                          <div className="flex items-center gap-2.5 mt-3 pt-3 border-t border-gray-50">
+                          <div 
+                            onClick={() => setSelectedDriverProfile(trip.driverId)}
+                            className="flex items-center gap-2.5 mt-3 pt-3 border-t border-gray-50 cursor-pointer hover:bg-slate-50 p-1.5 rounded-xl transition-all"
+                            title="Click to view driver profile"
+                          >
                             <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 font-extrabold text-xs flex items-center justify-center border border-orange-200">
                               {trip.driverId.name ? trip.driverId.name.charAt(0).toUpperCase() : "D"}
                             </div>
                             <div className="flex flex-col">
-                              <span className="text-xs font-bold text-gray-900">Driver Assigned: {trip.driverId.name}</span>
-                              <span className="text-[10px] text-gray-450 font-medium">★ {trip.driverId.rating || "5.0"} rating · Verified carrier</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-bold text-gray-900 hover:underline">Driver Assigned: {trip.driverId.name}</span>
+                                {trip.driverId.truckNumber && trip.driverId.licenseNumber && (
+                                  <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-blue-500 text-white shadow-sm" title="Verified Driver">
+                                    <Check size={8} strokeWidth={4} />
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[10px] text-gray-450 font-medium">
+                                ★ {trip.driverId.rating || "5.0"} rating · {trip.driverId.truckNumber && trip.driverId.licenseNumber ? (
+                                  <span className="text-blue-600 font-bold">Verified Driver</span>
+                                ) : (
+                                  "Verified carrier"
+                                )}
+                              </span>
                             </div>
                           </div>
                         )}
                       </div>
-                      <div className="flex gap-3">
-                        <button onClick={() => handleOpenChat(trip)} className="px-4 py-2 bg-orange-50 text-orange-600 font-bold rounded-xl text-sm hover:bg-orange-100 transition-colors">
-                          Chat
-                        </button>
-                        <button className="px-4 py-2 bg-gray-900 text-white font-bold rounded-xl text-sm hover:bg-gray-800 transition-colors shadow-md">
-                          Track Live
-                        </button>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex gap-3">
+                          <button 
+                            onClick={() => handleOpenChat(trip)} 
+                            disabled={trip.status === "pending"}
+                            className={`px-4 py-2 font-bold rounded-xl text-sm transition-colors ${trip.status === "pending" ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "bg-orange-50 text-orange-600 hover:bg-orange-100"}`}
+                          >
+                            Chat
+                          </button>
+                          <button 
+                            disabled={trip.status === "pending"}
+                            className={`px-4 py-2 font-bold rounded-xl text-sm transition-colors shadow-md ${trip.status === "pending" ? "bg-gray-300 text-gray-500 cursor-not-allowed shadow-none" : "bg-gray-900 text-white hover:bg-gray-800"}`}
+                          >
+                            Track Live
+                          </button>
+                        </div>
+                        {trip.status === "pending" && (
+                          <button onClick={() => handleDeleteTrip(trip._id)} className="px-4 py-1.5 w-full bg-red-50 text-red-600 font-bold rounded-xl text-xs hover:bg-red-100 transition-colors border border-red-100">
+                            Cancel Request
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -428,6 +498,9 @@ export default function Dashboard() {
                           <span className={`text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-full ${trip.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{trip.status}</span>
                         </div>
                         <h3 className="font-bold text-lg text-gray-900">{trip.pickup} <span className="text-gray-400">→</span> {trip.dropoff}</h3>
+                        {trip.viaStops && trip.viaStops.length > 0 && (
+                          <p className="text-xs text-green-600 font-bold mt-1">Via: {trip.viaStops.join(" → ")}</p>
+                        )}
                         <p className="text-sm text-gray-500 mt-1">{new Date(trip.createdAt).toLocaleDateString()}</p>
                       </div>
                       <div className="font-bold text-gray-900">₹{trip.price}</div>
@@ -460,7 +533,12 @@ export default function Dashboard() {
                       {trips.map(trip => (
                         <tr key={trip._id} className="hover:bg-gray-50/50">
                           <td className="px-6 py-4 text-gray-600">{new Date(trip.createdAt).toLocaleDateString()}</td>
-                          <td className="px-6 py-4 font-medium text-gray-900">{trip.pickup} → {trip.dropoff}</td>
+                          <td className="px-6 py-4 font-medium text-gray-900">
+                            <div>{trip.pickup} → {trip.dropoff}</div>
+                            {trip.viaStops && trip.viaStops.length > 0 && (
+                              <div className="text-[10px] text-green-600 font-bold mt-0.5 truncate max-w-[200px]">Via: {trip.viaStops.join(" → ")}</div>
+                            )}
+                          </td>
                           <td className="px-6 py-4">
                             <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-full ${trip.status === 'completed' ? 'bg-green-100 text-green-700' : trip.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'}`}>{trip.status}</span>
                           </td>
@@ -512,145 +590,167 @@ export default function Dashboard() {
 
           {/* TAB: CHAT */}
           {activeTab === "chat" && (
-            <div className="flex flex-col h-full bg-slate-50">
-              {/* Trip selector header */}
-              <div className="px-6 py-4 border-b border-gray-100 bg-white flex justify-between items-center z-10 shrink-0">
-                <div>
-                  <h3 className="font-bold text-gray-900 font-serif text-lg">
-                    {user?.role === "driver" ? "Customer Support / Chat" : "Driver Chat"}
-                  </h3>
-                  <div className="flex gap-2 mt-1">
-                    <select 
-                      className="text-xs border border-gray-200 rounded-lg px-2 py-1 outline-none"
-                      onChange={(e) => setSelectedTrip(trips.find(t => t._id === e.target.value))}
-                      value={selectedTrip?._id || ""}
-                    >
-                      <option value="" disabled>Select a trip</option>
-                      {trips.map(t => (
-                        <option key={t._id} value={t._id}>{t.pickup} → {t.dropoff}</option>
-                      ))}
-                    </select>
-                  </div>
+            <div className="flex flex-1 overflow-hidden h-full">
+              {/* Left Column: Conversations List */}
+              <div className="w-80 border-r border-gray-100 flex flex-col bg-white overflow-y-auto shrink-0 animate-fade-in">
+                <div className="p-4 border-b border-gray-50">
+                  <h3 className="font-extrabold text-gray-900 text-xs uppercase tracking-wider">Your Conversations</h3>
                 </div>
+                {trips.length === 0 ? (
+                  <div className="text-center py-10 text-gray-400 text-xs">No active chats found.</div>
+                ) : (
+                  <div className="divide-y divide-gray-50">
+                    {trips.map(t => {
+                      const isActive = selectedTrip?._id === t._id;
+                      const partnerName = t.driverId?.name || "Driver Assigned";
+                      return (
+                        <button
+                          key={t._id}
+                          onClick={() => setSelectedTrip(t)}
+                          className={`w-full text-left p-4 hover:bg-slate-50 transition-colors flex flex-col gap-1.5 ${isActive ? "bg-orange-50/50 border-l-4 border-orange-500" : ""}`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <span className="font-bold text-gray-900 text-sm">{partnerName}</span>
+                            <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${t.status === 'completed' ? 'bg-green-150 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                              {t.status}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500 font-semibold truncate">{t.pickup.split(',')[0]} → {t.dropoff.split(',')[0]}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
-              {selectedTrip ? (
-                <>
-                  {/* Messages Area */}
-                  <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                    {messages.length === 0 ? (
-                      <div className="text-center text-gray-400 mt-10 text-sm bg-white p-4 rounded-xl border border-gray-100 inline-block mx-auto">
-                        No messages yet. Send a message to start chatting.
+              {/* Right Column: Chat Content */}
+              <div className="flex-1 flex flex-col bg-slate-50/50 h-full overflow-hidden">
+                {selectedTrip ? (
+                  <>
+                    <div className="px-6 py-4 border-b border-gray-100 bg-white flex justify-between items-center z-10 shrink-0">
+                      <div>
+                        <h3 className="font-extrabold text-gray-900 text-base">
+                          Chat with Driver: {selectedTrip?.driverId?.name || "Driver"}
+                        </h3>
+                        <p className="text-[10px] text-gray-450 font-bold uppercase tracking-wider mt-0.5">{selectedTrip.pickup.split(',')[0]} → {selectedTrip.dropoff.split(',')[0]}</p>
                       </div>
-                    ) : (
-                      messages.map(msg => {
-                        const isMe = msg.senderId === user?.id;
-                        const msgTime = msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now";
-                        return (
-                          <div key={msg._id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
-                            <div className={`max-w-xs md:max-w-md px-4 py-2.5 rounded-2xl text-sm flex flex-col ${isMe ? "bg-orange-500 text-white rounded-br-none shadow-orange-200 shadow-md" : "bg-white text-gray-800 border border-gray-200 rounded-bl-none shadow-sm"}`}>
-                              <div>{msg.text}</div>
-                              <div className={`text-[10px] flex items-center gap-1 mt-1 justify-end ${isMe ? "text-orange-100" : "text-gray-400"}`}>
-                                {msgTime}
-                                {isMe && (
-                                  msg.status === "seen" ? <CheckCheck size={12} className="text-blue-200" /> :
-                                  msg.status === "delivered" ? <CheckCheck size={12} /> :
-                                  <Check size={12} />
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                    <div ref={messagesEndRef} />
-                  </div>
+                    </div>
 
-                  {/* Chat Input or Closed Chat Feedback Form */}
-                  {selectedTrip.status === "completed" ? (
-                    <div className="p-6 bg-white border-t border-gray-100 shrink-0 flex flex-col gap-4">
-                      <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-4 text-center max-w-xl mx-auto w-full">
-                        <span className="text-xl">✅</span>
-                        <h4 className="font-bold text-gray-900 text-sm mt-1">This trip is completed!</h4>
-                        <p className="text-xs text-gray-500 mt-0.5 font-medium">The chat session has ended. Share your valuable experience below.</p>
-                      </div>
-
-                      {/* Review / Feedback Section */}
-                      {selectedTrip.customerRating !== undefined && selectedTrip.customerRating !== null ? (
-                        <div className="text-center max-w-xl mx-auto w-full p-5 bg-emerald-50/50 border border-emerald-100 rounded-2xl">
-                          <p className="text-xs font-black text-emerald-850">🎉 Thank you! Your feedback has been recorded successfully.</p>
-                          <div className="flex justify-center items-center gap-1.5 mt-2">
-                            <span className="text-xs font-semibold text-gray-600">Your Rating:</span>
-                            <span className="text-sm font-black text-amber-500">{"★".repeat(selectedTrip.customerRating)}{"☆".repeat(5 - selectedTrip.customerRating)}</span>
-                            <span className="text-xs font-bold text-gray-500">({selectedTrip.customerRating} / 5)</span>
-                          </div>
-                          {selectedTrip.customerReview && (
-                            <p className="text-xs text-gray-500 italic mt-3 bg-white/70 py-2 px-3 rounded-xl border border-emerald-100/50">"{selectedTrip.customerReview}"</p>
-                          )}
+                    <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                      {messages.length === 0 ? (
+                        <div className="text-center text-gray-400 mt-10 text-sm bg-white p-4 rounded-xl border border-gray-100 inline-block mx-auto">
+                          No messages yet. Send a message to start chatting.
                         </div>
                       ) : (
-                        <div className="max-w-xl mx-auto w-full bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-                          <h5 className="font-bold text-gray-800 text-xs uppercase tracking-wide mb-3">Rate your Driver ({selectedTrip.driverId?.name || "Driver"})</h5>
-                          
-                          <div className="flex gap-2.5 mb-4">
-                            {[1, 2, 3, 4, 5].map((stars) => (
-                              <button
-                                key={stars}
-                                type="button"
-                                onClick={() => setReviewRating(stars)}
-                                className={`text-2xl transition-all ${
-                                  reviewRating >= stars ? "text-amber-500 scale-110" : "text-gray-200 hover:text-amber-400"
-                                }`}
-                              >
-                                ★
-                              </button>
-                            ))}
-                          </div>
-
-                          <textarea
-                            value={reviewText}
-                            onChange={(e) => setReviewText(e.target.value)}
-                            placeholder="Write a brief review about the driving safety, vehicle condition, and delivery speed..."
-                            rows={3}
-                            className="w-full p-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-xs mb-3 resize-none font-medium"
-                          />
-
-                          <button
-                            onClick={submitCustomerReview}
-                            className="w-full bg-orange-500 text-white font-bold py-2.5 rounded-xl text-xs hover:bg-orange-600 transition-colors shadow-md shadow-orange-100"
-                          >
-                            Submit Review & Rating
-                          </button>
-                        </div>
+                        messages.map(msg => {
+                          const isMe = msg.senderId === user?.id;
+                          const msgTime = msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now";
+                          return (
+                            <div key={msg._id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                              <div className={`max-w-xs md:max-w-md px-4 py-2.5 rounded-2xl text-sm flex flex-col ${isMe ? "bg-orange-500 text-white rounded-br-none shadow-orange-200 shadow-md" : "bg-white text-gray-800 border border-gray-200 rounded-bl-none shadow-sm"}`}>
+                                <div>{msg.text}</div>
+                                <div className={`text-[10px] flex items-center gap-1 mt-1 justify-end ${isMe ? "text-orange-100" : "text-gray-400"}`}>
+                                  {msgTime}
+                                  {isMe && (
+                                    msg.status === "seen" ? <CheckCheck size={12} className="text-blue-200" /> :
+                                    msg.status === "delivered" ? <CheckCheck size={12} /> :
+                                    <Check size={12} />
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
                       )}
+                      <div ref={messagesEndRef} />
                     </div>
-                  ) : (
-                    /* Chat Input */
-                    <div className="p-4 bg-white border-t border-gray-100 shrink-0">
-                      <form onSubmit={sendMessage} className="flex gap-3 max-w-4xl mx-auto">
-                        <input
-                          type="text"
-                          value={text}
-                          onChange={e => setText(e.target.value)}
-                          placeholder="Type your message..."
-                          className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
-                        />
-                        <button 
-                          type="submit"
-                          className="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold shadow-md shadow-orange-200 hover:bg-orange-600 transition-colors"
-                        >
-                          Send
-                        </button>
-                      </form>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
-                  <MessageSquare size={48} className="mb-4 opacity-50" />
-                  <p>Select a trip from the dropdown above to start chatting</p>
-                </div>
-              )}
+
+                    {/* Chat Input or Closed Chat Feedback Form */}
+                    {selectedTrip.status === "completed" ? (
+                      <div className="p-6 bg-white border-t border-gray-100 shrink-0 flex flex-col gap-4">
+                        <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-4 text-center max-w-xl mx-auto w-full">
+                          <span className="text-xl">✅</span>
+                          <h4 className="font-bold text-gray-900 text-sm mt-1">This trip is completed!</h4>
+                          <p className="text-xs text-gray-500 mt-0.5 font-medium">The chat session has ended. Share your valuable experience below.</p>
+                        </div>
+
+                        {/* Review / Feedback Section */}
+                        {selectedTrip.customerRating !== undefined && selectedTrip.customerRating !== null ? (
+                          <div className="text-center max-w-xl mx-auto w-full p-5 bg-emerald-50/50 border border-emerald-100 rounded-2xl">
+                            <p className="text-xs font-black text-emerald-850">🎉 Thank you! Your feedback has been recorded successfully.</p>
+                            <div className="flex justify-center items-center gap-1.5 mt-2">
+                              <span className="text-xs font-semibold text-gray-600">Your Rating:</span>
+                              <span className="text-sm font-black text-amber-500">{"★".repeat(selectedTrip.customerRating)}{"☆".repeat(5 - selectedTrip.customerRating)}</span>
+                              <span className="text-xs font-bold text-gray-500">({selectedTrip.customerRating} / 5)</span>
+                            </div>
+                            {selectedTrip.customerReview && (
+                              <p className="text-xs text-gray-500 italic mt-3 bg-white/70 py-2 px-3 rounded-xl border border-emerald-100/50">"{selectedTrip.customerReview}"</p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="max-w-xl mx-auto w-full bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+                            <h5 className="font-bold text-gray-800 text-xs uppercase tracking-wide mb-3">Rate your Driver ({selectedTrip.driverId?.name || "Driver"})</h5>
+                            
+                            <div className="flex gap-2.5 mb-4">
+                              {[1, 2, 3, 4, 5].map((stars) => (
+                                <button
+                                  key={stars}
+                                  type="button"
+                                  onClick={() => setReviewRating(stars)}
+                                  className={`text-2xl transition-all ${
+                                    reviewRating >= stars ? "text-amber-500 scale-110" : "text-gray-200 hover:text-amber-400"
+                                  }`}
+                                >
+                                  ★
+                                </button>
+                              ))}
+                            </div>
+
+                            <textarea
+                              value={reviewText}
+                              onChange={(e) => setReviewText(e.target.value)}
+                              placeholder="Write a brief review about the driving safety, vehicle condition, and delivery speed..."
+                              rows={3}
+                              className="w-full p-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-xs mb-3 resize-none font-medium"
+                            />
+
+                            <button
+                              onClick={submitCustomerReview}
+                              className="w-full bg-orange-500 text-white font-bold py-2.5 rounded-xl text-xs hover:bg-orange-600 transition-colors shadow-md shadow-orange-100"
+                            >
+                              Submit Review & Rating
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      /* Chat Input */
+                      <div className="p-4 bg-white border-t border-gray-100 shrink-0">
+                        <form onSubmit={sendMessage} className="flex gap-3 max-w-4xl mx-auto">
+                          <input
+                            type="text"
+                            value={text}
+                            onChange={e => setText(e.target.value)}
+                            placeholder="Type your message..."
+                            className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                          />
+                          <button 
+                            type="submit"
+                            className="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold shadow-md shadow-orange-200 hover:bg-orange-600 transition-colors"
+                          >
+                            Send
+                          </button>
+                        </form>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
+                    <MessageSquare size={48} className="mb-4 opacity-50" />
+                    <p className="text-sm font-semibold">Select a conversation from the left to start chatting</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -733,6 +833,12 @@ export default function Dashboard() {
                   <span className="text-gray-400 font-medium">Dropoff Location</span>
                   <span className="text-gray-950 font-bold text-right max-w-[70%] truncate">{selectedInvoiceTrip.dropoff}</span>
                 </div>
+                {selectedInvoiceTrip.viaStops && selectedInvoiceTrip.viaStops.length > 0 && (
+                  <div className="flex justify-between text-xs sm:text-sm">
+                    <span className="text-gray-400 font-medium">Via Stops</span>
+                    <span className="text-green-600 font-bold text-right max-w-[70%] truncate">{selectedInvoiceTrip.viaStops.join(" → ")}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-xs sm:text-sm">
                   <span className="text-gray-400 font-medium">Total Distance</span>
                   <span className="text-gray-950 font-bold">{selectedInvoiceTrip.distance ? selectedInvoiceTrip.distance.toFixed(1) : 0} km</span>
@@ -802,6 +908,94 @@ export default function Dashboard() {
                   className="py-3 px-4 rounded-xl text-white font-bold text-sm bg-orange-500 hover:bg-orange-600 transition-colors shadow-md shadow-orange-200 flex items-center justify-center"
                 >
                   Close
+                </button>
+             </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {selectedDriverProfile && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+            onClick={() => setSelectedDriverProfile(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl border border-gray-100 flex flex-col relative overflow-hidden"
+            >
+              {/* Header profile pattern */}
+              <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-r from-orange-400 to-orange-500 z-0"></div>
+              
+              <div className="relative z-10 flex flex-col items-center mt-8">
+                <div className="w-20 h-20 rounded-full bg-white p-1 shadow-lg">
+                  <div className="w-full h-full rounded-full bg-orange-100 text-orange-600 text-2xl font-black flex items-center justify-center border border-orange-200">
+                    {selectedDriverProfile.name ? selectedDriverProfile.name.charAt(0).toUpperCase() : "D"}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 mt-3">
+                  <h3 className="font-extrabold text-xl text-gray-900">{selectedDriverProfile.name}</h3>
+                  {selectedDriverProfile.truckNumber && selectedDriverProfile.licenseNumber && (
+                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-500 text-white shadow-md" title="Verified Driver">
+                      <Check size={10} strokeWidth={4} />
+                    </span>
+                  )}
+                </div>
+
+                {selectedDriverProfile.truckNumber && selectedDriverProfile.licenseNumber ? (
+                  <span className="text-[10px] uppercase tracking-wider font-extrabold text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-0.5 rounded-full mt-1 flex items-center gap-1">
+                    Verified Driver Partner
+                  </span>
+                ) : (
+                  <span className="text-[10px] uppercase tracking-wider font-extrabold text-gray-500 bg-gray-50 border border-gray-100 px-2.5 py-0.5 rounded-full mt-1">
+                    Carrier Partner
+                  </span>
+                )}
+
+                {/* Rating display */}
+                <div className="flex items-center gap-2 mt-4 bg-slate-50 px-4 py-2 rounded-2xl border border-slate-100 w-full justify-around">
+                  <div className="text-center">
+                    <span className="text-xs text-gray-400 font-bold block">Rating</span>
+                    <span className="font-black text-sm text-gray-900">★ {selectedDriverProfile.rating ? selectedDriverProfile.rating.toFixed(1) : "5.0"}</span>
+                  </div>
+                  <div className="h-8 w-px bg-slate-200"></div>
+                  <div className="text-center">
+                    <span className="text-xs text-gray-400 font-bold block">Trips Done</span>
+                    <span className="font-black text-sm text-gray-900">{selectedDriverProfile.tripsDone || 0}</span>
+                  </div>
+                  <div className="h-8 w-px bg-slate-200"></div>
+                  <div className="text-center">
+                    <span className="text-xs text-gray-400 font-bold block">Reviews</span>
+                    <span className="font-black text-sm text-gray-900">{selectedDriverProfile.reviewsCount || 0}</span>
+                  </div>
+                </div>
+
+                <div className="w-full space-y-3 mt-6 border-t border-slate-100 pt-4">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-gray-400 font-bold uppercase tracking-wider">Truck Reg. Number</span>
+                    <span className="font-black text-gray-900 bg-slate-100 px-2.5 py-1 rounded-lg uppercase">{selectedDriverProfile.truckNumber || "Not Provided"}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-gray-400 font-bold uppercase tracking-wider">Govt Driving License</span>
+                    <span className="font-black text-gray-950 bg-slate-100 px-2.5 py-1 rounded-lg uppercase">{selectedDriverProfile.licenseNumber || "Not Provided"}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-gray-400 font-bold uppercase tracking-wider">Current Location</span>
+                    <span className="font-black text-gray-900">{selectedDriverProfile.location || "On Route"}</span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setSelectedDriverProfile(null)}
+                  className="w-full mt-6 py-3.5 bg-gray-900 hover:bg-gray-800 text-white font-bold rounded-2xl text-xs uppercase tracking-wider transition-colors shadow-md shadow-slate-150"
+                >
+                  Close Profile
                 </button>
               </div>
             </motion.div>

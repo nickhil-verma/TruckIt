@@ -8,6 +8,7 @@ const TripSchema = new mongoose.Schema({
   truckType: { type: String, required: true },
   price: { type: Number, required: true },
   distance: { type: Number },
+  viaStops: { type: [String], default: [] },
   status: { type: String, enum: ["pending", "accepted", "running", "completed", "cancelled"], default: "pending" },
   customerReview: { type: String },
   customerRating: { type: Number },
