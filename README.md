@@ -7,7 +7,7 @@
 
 **TRUCK<span style="color:#f97316;">IT</span>** is a state-of-the-art, hyper-efficient logistics and fleet booking application designed to bridge the gap between customers and verified freight drivers in real-time. Featuring Apple-style animated showcases, dynamic maps, lightweight client-side OCR driver verification, and a live secure chat infrastructure.
 
-🔗 **Live Application URL:** [https://truckit-frontend-iota.vercel.app/](https://truckit-frontend-iota.vercel.app/)
+🔗 **Live Application URL:** [[https://truckit-frontend-iota.vercel.app/](https://truckit-frontend-iota.vercel.app/)](https://truckit-transport.vercel.app/)
 
 ---
 
