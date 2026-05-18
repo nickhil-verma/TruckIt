@@ -1,26 +1,25 @@
 "use client"
 import { useEffect, useRef, useState } from "react";
-import { motion, useInView, useScroll, useTransform, AnimatePresence } from "framer-motion";
+import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion";
+import { gsap } from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { useGSAP } from "@gsap/react";
+
+if (typeof window !== "undefined") {
+  gsap.registerPlugin(ScrollTrigger);
+}
 
 /* ─────────────────────────────────────────────
    Tailwind + shadcn assumed available.
    Google Font loaded via <style> tag injection.
-───────────────────────────────────────────── */
+ ───────────────────────────────────────────── */
 
 // ── Fade-in wrapper used throughout ──────────
-function FadeUp({ children, delay = 0, className = "" }) {
-  const ref = useRef(null);
-  const inView = useInView(ref, { once: true, margin: "-60px" });
+function FadeUp({ children, className = "" }) {
   return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, y: 28 }}
-      animate={inView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] }}
-      className={className}
-    >
+    <div className={`gsap-item opacity-0 ${className}`}>
       {children}
-    </motion.div>
+    </div>
   );
 }
 
@@ -169,14 +168,193 @@ import Navbar from "@/components/Navbar";
 // ── Main Landing Page ─────────────────────────
 export default function TruckItLanding() {
   const heroRef = useRef(null);
+  const landingContainerRef = useRef(null);
+  const pinSectionRef = useRef(null);
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ["start start", "end start"] });
   const heroY = useTransform(scrollYProgress, [0, 1], [0, 80]);
   const heroOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
 
+  useGSAP(() => {
+    // 1. Hero Entrance Animations
+    gsap.fromTo(".gsap-hero-el", 
+      { y: 35, opacity: 0 },
+      { y: 0, opacity: 1, duration: 0.85, stagger: 0.12, ease: "power3.out" }
+    );
+
+    // 2. Pinned Showcase ScrollTrigger Animation
+    const pinSection = pinSectionRef.current;
+    if (pinSection) {
+      const pinTl = gsap.timeline({
+        scrollTrigger: {
+          trigger: pinSection,
+          start: "top top",      // pin when top reaches top of viewport
+          end: "+=220%",         // keep pinned longer to accommodate immersive changes
+          scrub: 1,
+          pin: true,             // pin the section!
+          anticipatePin: 1,
+          onEnter: () => {
+            gsap.to(".gsap-navbar", { top: "-100px", opacity: 0, duration: 0.4, ease: "power2.out" });
+          },
+          onLeave: () => {
+            gsap.to(".gsap-navbar", { top: "1rem", opacity: 1, duration: 0.4, ease: "power2.out" });
+          },
+          onEnterBack: () => {
+            gsap.to(".gsap-navbar", { top: "-100px", opacity: 0, duration: 0.4, ease: "power2.out" });
+          },
+          onLeaveBack: () => {
+            gsap.to(".gsap-navbar", { top: "1rem", opacity: 1, duration: 0.4, ease: "power2.out" });
+          }
+        }
+      });
+
+      // A. Turn section theme to a beautiful dark pitch-black
+      pinTl.to(".gsap-showcase-section", {
+        backgroundColor: "#000000", // sleek immersive pure pitch-black theme
+        duration: 0.6,
+        ease: "power2.out"
+      }, 0)
+      .to(".gsap-showcase-title", {
+        color: "#ffffff",
+        duration: 0.6,
+      }, 0)
+      .to(".gsap-showcase-desc", {
+        color: "#94a3b8", // slate-400
+        duration: 0.6,
+      }, 0)
+      .to(".gsap-showcase-pill", {
+        backgroundColor: "#1e293b", // slate-800
+        borderColor: "#334155", // slate-700
+        duration: 0.6,
+      }, 0)
+      // Transition all list headers immediately to white so they are visible
+      .to([".gsap-detail-item-header-1", ".gsap-detail-item-header-2", ".gsap-detail-item-header-3"], {
+        color: "#ffffff",
+        duration: 0.5,
+      }, 0)
+      // Transition all list bodies immediately to light grey so they are visible
+      .to([".gsap-detail-item-body-1", ".gsap-detail-item-body-2", ".gsap-detail-item-body-3"], {
+        color: "#cbd5e1",
+        duration: 0.5,
+      }, 0)
+      .fromTo(".gsap-ui-card", 
+        { scale: 0.95, y: 30 },
+        { scale: 1, y: 0, duration: 0.8, ease: "power2.out" },
+        0
+      );
+
+      // B. Transition from Text 1 to Text 2 active
+      pinTl.to(".gsap-detail-item-1", {
+        opacity: 0.2,
+        borderColor: "#334155", // slate-700
+        duration: 0.6,
+        ease: "power1.inOut"
+      }, "+=0.4")
+      .to(".gsap-detail-item-2", {
+        opacity: 1,
+        borderColor: "#f97316", // orange-500
+        duration: 0.6,
+        ease: "power1.inOut"
+      }, "<")
+      .to(".gsap-detail-item-header-2", {
+        color: "#ffffff",
+        duration: 0.3,
+      }, "<")
+      .to(".gsap-detail-item-body-2", {
+        color: "#cbd5e1",
+        duration: 0.3,
+      }, "<");
+
+      // C. Transition from Text 2 to Text 3 active
+      pinTl.to(".gsap-detail-item-2", {
+        opacity: 0.2,
+        borderColor: "#334155",
+        duration: 0.6,
+        ease: "power1.inOut"
+      }, "+=0.4")
+      .to(".gsap-detail-item-3", {
+        opacity: 1,
+        borderColor: "#f97316",
+        duration: 0.6,
+        ease: "power1.inOut"
+      }, "<")
+      .to(".gsap-detail-item-header-3", {
+        color: "#ffffff",
+        duration: 0.3,
+      }, "<")
+      .to(".gsap-detail-item-body-3", {
+        color: "#cbd5e1",
+        duration: 0.3,
+      }, "<");
+
+      // D. Smooth exit transition back to light grey theme before unpinning!
+      pinTl.to(".gsap-showcase-section", {
+        backgroundColor: "#f9fafc", // original light grey-50 bg
+        duration: 0.6,
+        ease: "power2.inOut"
+      }, "+=0.4")
+      .to(".gsap-showcase-title", {
+        color: "#111827", // gray-900
+        duration: 0.6,
+      }, "<")
+      .to(".gsap-showcase-desc", {
+        color: "#6b7280", // gray-500
+        duration: 0.6,
+      }, "<")
+      .to(".gsap-showcase-pill", {
+        backgroundColor: "#fff7ed", // orange-50
+        borderColor: "#fed7aa", // orange-200
+        duration: 0.6,
+      }, "<")
+      .to(".gsap-detail-item-header-3", {
+        color: "#111827", // gray-900
+        duration: 0.4,
+      }, "<")
+      .to(".gsap-detail-item-body-3", {
+        color: "#6b7280", // gray-500
+        duration: 0.4,
+      }, "<")
+      .to([".gsap-detail-item-header-1", ".gsap-detail-item-header-2"], {
+        color: "#111827",
+        duration: 0.4,
+      }, "<")
+      .to([".gsap-detail-item-body-1", ".gsap-detail-item-body-2"], {
+        color: "#6b7280",
+        duration: 0.4,
+      }, "<")
+      .to([".gsap-detail-item-1", ".gsap-detail-item-2"], {
+        borderColor: "#e5e7eb", // original border-gray-200
+        duration: 0.6,
+      }, "<");
+    }
+
+    // 3. Sections ScrollTrigger Animations
+    const sections = gsap.utils.toArray(".gsap-section");
+    sections.forEach((section) => {
+      const items = section.querySelectorAll(".gsap-item");
+      if (items.length > 0) {
+        gsap.fromTo(items,
+          { y: 40, opacity: 0 },
+          {
+            scrollTrigger: {
+              trigger: section,
+              start: "top 80%",
+              toggleActions: "play none none none",
+            },
+            y: 0,
+            opacity: 1,
+            duration: 0.75,
+            stagger: 0.08,
+            ease: "power2.out",
+          }
+        );
+      }
+    });
+  }, { scope: landingContainerRef });
+
   return (
     <>
 
-      <div className="bg-white text-gray-900 antialiased overflow-x-hidden">
+      <div ref={landingContainerRef} className="bg-white text-gray-900 antialiased overflow-x-hidden">
         <Navbar />
 
         {/* ── HERO ─────────────────────────────── */}
@@ -200,40 +378,21 @@ export default function TruckItLanding() {
             style={{ y: heroY, opacity: heroOpacity }}
             className="relative z-10 flex flex-col items-center text-center max-w-4xl mx-auto"
           >
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.1 }}
-            >
+            <div className="gsap-hero-el opacity-0">
               <Pill>🚛 India's Smartest Freight Platform</Pill>
-            </motion.div>
+            </div>
 
-            <motion.h1
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
-              className="mt-6 text-5xl sm:text-6xl md:text-8xl font-extrabold tracking-tight leading-[1.05] text-gray-900 font-serif"
-            >
+            <h1 className="gsap-hero-el opacity-0 mt-6 text-5xl sm:text-6xl md:text-8xl font-extrabold tracking-tight leading-[1.05] text-gray-900 font-serif">
               Move anything,
               <br />
               <span className="text-orange-500 font-cursive italic font-normal text-6xl sm:text-7xl md:text-9xl">anywhere.</span>
-            </motion.h1>
+            </h1>
 
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, delay: 0.35 }}
-              className="mt-6 max-w-xl text-base sm:text-lg text-gray-500 leading-relaxed"
-            >
+            <p className="gsap-hero-el opacity-0 mt-6 max-w-xl text-base sm:text-lg text-gray-500 leading-relaxed">
               Book verified trucks in under 60 seconds. Real-time tracking, transparent pricing, and zero hidden charges — from mini pickups to heavy-haul giants.
-            </motion.p>
+            </p>
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.5 }}
-              className="mt-8 flex flex-col sm:flex-row items-center gap-3"
-            >
+            <div className="gsap-hero-el opacity-0 mt-8 flex flex-col sm:flex-row items-center gap-3">
               <a
                 href="/startbooking"
                 className="rounded-2xl bg-orange-500 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-orange-200 hover:bg-orange-600 hover:shadow-orange-300 transition-all duration-200"
@@ -246,65 +405,93 @@ export default function TruckItLanding() {
               >
                 See How It Works
               </a>
-            </motion.div>
+            </div>
 
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.75 }}
-              className="mt-5 text-xs text-gray-400"
-            >
+            <p className="gsap-hero-el opacity-0 mt-5 text-xs text-gray-400">
               ✓ No sign-up fee &nbsp;·&nbsp; ✓ Verified drivers &nbsp;·&nbsp; ✓ 24/7 support
-            </motion.p>
+            </p>
           </motion.div>
 
-          {/* Floating truck visual */}
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.9, delay: 0.6, ease: [0.22, 1, 0.36, 1] }}
-            className="relative z-10 mt-16 w-full max-w-3xl mx-auto"
-          >
-            <div className="rounded-3xl border border-gray-100 bg-white shadow-2xl shadow-gray-200/60 overflow-hidden">
-              {/* Mock booking UI */}
-              <div className="border-b border-gray-100 px-5 py-3 flex items-center gap-2">
-                <div className="h-3 w-3 rounded-full bg-red-300" />
-                <div className="h-3 w-3 rounded-full bg-yellow-300" />
-                <div className="h-3 w-3 rounded-full bg-green-300" />
-                <span className="ml-3 text-xs text-gray-400 font-mono">truckit.app/book</span>
-              </div>
-              <div className="p-6 grid grid-cols-2 sm:grid-cols-3 gap-4">
-                <div className="col-span-2 sm:col-span-3 rounded-2xl bg-gray-50 p-4 flex items-center gap-4">
-                  <div className="h-10 w-10 rounded-xl bg-orange-100 flex items-center justify-center text-xl">📍</div>
-                  <div className="flex-1">
-                    <div className="h-2.5 w-24 rounded bg-gray-200 mb-2" />
-                    <div className="h-2 w-36 rounded bg-gray-100" />
+        </section>
+
+        {/* ── PINNED SHOWCASE ──────────────────── */}
+        <section ref={pinSectionRef} className="gsap-showcase-section relative w-full min-h-screen bg-gray-50 flex items-center justify-center py-20 px-4 overflow-hidden border-b border-gray-100">
+          <div className="mx-auto max-w-6xl w-full grid grid-cols-1 md:grid-cols-12 gap-12 items-center">
+            
+            {/* The Booking UI Card itself (pinned on the left/center) */}
+            <div className="md:col-span-7 flex justify-center w-full">
+              <div className="gsap-ui-card w-full max-w-2xl rounded-3xl border border-gray-100 bg-white shadow-[0_25px_60px_-15px_rgba(0,0,0,0.15)] hover:shadow-[0_30px_70px_-10px_rgba(249,115,22,0.15)] transition-shadow duration-500 overflow-hidden">
+                {/* Mock booking UI browser top bar */}
+                <div className="border-b border-gray-100 px-5 py-3 flex items-center justify-between bg-white/80 backdrop-blur">
+                  <div className="flex items-center gap-2">
+                    <div className="h-3 w-3 rounded-full bg-red-300" />
+                    <div className="h-3 w-3 rounded-full bg-yellow-300" />
+                    <div className="h-3 w-3 rounded-full bg-green-300" />
+                    <span className="ml-3 text-xs text-gray-400 font-mono">truckit.app/book</span>
                   </div>
+                  <span className="text-[10px] font-bold text-orange-500 bg-orange-50 px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                    ⚡ Live Booking System
+                  </span>
                 </div>
-                {["🛻 Mini · ₹12/km", "🚚 Medium · ₹18/km", "🚛 Heavy · ₹28/km"].map((t, i) => (
-                  <div
-                    key={i}
-                    className={`rounded-xl border p-3 text-center text-xs font-medium ${
-                      i === 1
-                        ? "border-orange-300 bg-orange-50 text-orange-700"
-                        : "border-gray-100 bg-white text-gray-500"
-                    }`}
-                  >
-                    {t}
-                  </div>
-                ))}
-                <div className="col-span-2 sm:col-span-3">
-                  <div className="w-full rounded-xl bg-orange-500 py-3 text-center text-sm font-semibold text-white shadow shadow-orange-200">
-                    Confirm Booking — ₹2,160
-                  </div>
-                </div>
+                <img 
+                  src="/UI.png" 
+                  alt="TruckIt Booking Interface" 
+                  className="w-full h-auto object-cover"
+                />
               </div>
             </div>
-          </motion.div>
+
+            {/* UI Feature Details Card (scrolled on the right) */}
+            <div className="md:col-span-5 flex flex-col gap-8 text-left relative min-h-[350px]">
+              
+              <div className="space-y-2">
+                <span className="gsap-showcase-pill inline-flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold tracking-widest text-orange-500 uppercase w-max">
+                  Interactive Showcase
+                </span>
+                <h3 className="gsap-showcase-title text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900 font-serif leading-tight">
+                  Experience the next-gen booking interface.
+                </h3>
+                <p className="gsap-showcase-desc text-gray-500 text-sm leading-relaxed pt-2">
+                  Our intuitive platform matches you with the ideal transport provider in seconds. With zero configuration, watch live routes calculate instantly.
+                </p>
+              </div>
+
+              {/* The Text Cards that will be scrolled/revealed sequentially */}
+              <div className="relative flex-1">
+                
+                {/* Detail 1 */}
+                <div className="gsap-detail-item-1 space-y-2 border-l-2 border-orange-500 pl-4 py-1">
+                  <h4 className="gsap-detail-item-header-1 font-bold text-gray-900 text-lg">01 · Smart Route Geocoding</h4>
+                  <p className="gsap-detail-item-body-1 text-gray-500 text-sm leading-relaxed">
+                    Type address snippets and let our lightning-fast geocoding parse exact longitudes/latitudes instantly.
+                  </p>
+                </div>
+
+                {/* Detail 2 */}
+                <div className="gsap-detail-item-2 space-y-2 border-l-2 border-gray-200 pl-4 py-1 opacity-20 mt-6">
+                  <h4 className="gsap-detail-item-header-2 font-bold text-gray-900 text-lg">02 · Dynamic Fleet Pricing</h4>
+                  <p className="gsap-detail-item-body-2 text-gray-500 text-sm leading-relaxed">
+                    Instantly compare mini, medium, and heavy-haul truck configurations with real-time route calculations.
+                  </p>
+                </div>
+
+                {/* Detail 3 */}
+                <div className="gsap-detail-item-3 space-y-2 border-l-2 border-gray-200 pl-4 py-1 opacity-20 mt-6">
+                  <h4 className="gsap-detail-item-header-3 font-bold text-gray-900 text-lg">03 · Live Transit Stops</h4>
+                  <p className="gsap-detail-item-body-3 text-gray-500 text-sm leading-relaxed">
+                    Add multiple loading/unloading hubs along your journey and preview the total distance dynamically.
+                  </p>
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
         </section>
 
         {/* ── STATS ────────────────────────────── */}
-        <section className="border-y border-gray-100 bg-gray-50/50">
+        <section className="border-y border-gray-100 bg-gray-50/50 gsap-section">
           <div className="mx-auto max-w-5xl grid grid-cols-2 md:grid-cols-4 divide-x divide-y md:divide-y-0 divide-gray-100">
             <StatCard value="50,000+" label="Deliveries completed" icon="📦" />
             <StatCard value="1,200+" label="Verified truck partners" icon="🚛" />
@@ -314,7 +501,7 @@ export default function TruckItLanding() {
         </section>
 
         {/* ── FEATURES ─────────────────────────── */}
-        <section id="features" className="py-28 px-4">
+        <section id="features" className="py-28 px-4 gsap-section">
           <div className="mx-auto max-w-5xl">
             <FadeUp className="text-center mb-14">
               <Pill>Why TruckIt</Pill>
@@ -342,7 +529,7 @@ export default function TruckItLanding() {
         </section>
 
         {/* ── HOW IT WORKS ─────────────────────── */}
-        <section id="how-it-works" className="py-28 px-4 bg-gray-50/50">
+        <section id="how-it-works" className="py-28 px-4 bg-gray-50/50 gsap-section">
           <div className="mx-auto max-w-5xl grid md:grid-cols-2 gap-16 items-center">
             <div>
               <FadeUp>
@@ -371,7 +558,7 @@ export default function TruckItLanding() {
         </section>
 
         {/* ── FLEET ────────────────────────────── */}
-        <section id="fleet" className="py-28 px-4">
+        <section id="fleet" className="py-28 px-4 gsap-section">
           <div className="mx-auto max-w-5xl">
             <FadeUp className="text-center mb-14">
               <Pill>Our Fleet</Pill>
@@ -406,7 +593,7 @@ export default function TruckItLanding() {
         </section>
 
         {/* ── TESTIMONIALS ─────────────────────── */}
-        <section id="testimonials" className="py-28 px-4 bg-gray-50/50">
+        <section id="testimonials" className="py-28 px-4 bg-gray-50/50 gsap-section">
           <div className="mx-auto max-w-5xl">
             <FadeUp className="text-center mb-14">
               <Pill>Testimonials</Pill>
@@ -434,7 +621,7 @@ export default function TruckItLanding() {
         </section>
 
         {/* ── TRUST BAND ───────────────────────── */}
-        <section className="py-16 px-4 border-y border-gray-100">
+        <section className="py-16 px-4 border-y border-gray-100 gsap-section">
           <div className="mx-auto max-w-5xl">
             <FadeUp className="text-center mb-10">
               <p className="text-xs font-semibold tracking-widest text-gray-400 uppercase">
@@ -454,7 +641,7 @@ export default function TruckItLanding() {
         </section>
 
         {/* ── FAQ ──────────────────────────────── */}
-        <section id="faq" className="py-28 px-4">
+        <section id="faq" className="py-28 px-4 gsap-section">
           <div className="mx-auto max-w-2xl">
             <FadeUp className="text-center mb-14">
               <Pill>FAQ</Pill>
@@ -477,7 +664,7 @@ export default function TruckItLanding() {
         </section>
 
         {/* ── CTA BANNER ───────────────────────── */}
-        <section className="py-28 px-4">
+        <section className="py-28 px-4 gsap-section">
           <div className="mx-auto max-w-4xl">
             <FadeUp>
               <div className="relative rounded-3xl bg-gray-900 overflow-hidden px-8 py-16 text-center">

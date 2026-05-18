@@ -47,10 +47,10 @@ export default function Navbar() {
 
   return (
     <motion.nav
-      initial={{ y: -80, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
+      initial={{ top: "-80px", opacity: 0 }}
+      animate={{ top: "1rem", opacity: 1 }}
       transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-      className={`fixed top-4 left-1/2 z-50 w-[calc(100%-2rem)] max-w-5xl -translate-x-1/2 rounded-2xl transition-all duration-300 ${
+      className={`gsap-navbar fixed top-4 left-1/2 z-50 w-[calc(100%-2rem)] max-w-5xl -translate-x-1/2 rounded-2xl transition-all duration-300 ${
         scrolled
           ? "bg-white/90 shadow-lg shadow-gray-200/60 backdrop-blur-md border border-gray-100"
           : "bg-white/70 backdrop-blur-sm border border-gray-100/60"
