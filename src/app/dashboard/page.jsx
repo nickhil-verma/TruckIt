@@ -261,7 +261,7 @@ export default function Dashboard() {
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       <Navbar />
 
-      <main className="flex-1 pt-24 px-4 max-w-7xl mx-auto w-full flex flex-col md:flex-row gap-6 pb-6 md:h-[calc(100vh-6rem)] md:overflow-hidden">
+      <main className="flex-1 pt-28 px-4 max-w-7xl mx-auto w-full flex flex-col md:flex-row gap-6 pb-6 md:h-[calc(100vh-7rem)] md:overflow-hidden">
         
         {/* Sidebar Navigation */}
         <aside className="w-full md:w-64 flex-shrink-0 flex flex-col gap-2">

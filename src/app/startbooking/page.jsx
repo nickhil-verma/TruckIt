@@ -309,7 +309,7 @@ export default function TruckItApp() {
         <Navbar />
 
         {/* ── Body ── */}
-        <div className="pt-[72px] flex flex-1 overflow-hidden relative">
+        <div className="pt-[88px] flex flex-1 overflow-hidden relative">
 
           {/* ── Sidebar ── */}
           <AnimatePresence>
@@ -319,7 +319,7 @@ export default function TruckItApp() {
                 animate={{ x: 0, opacity: 1 }}
                 exit={{ x: -340, opacity: 0 }}
                 transition={{ type: "spring", stiffness: 300, damping: 32 }}
-                className="absolute md:relative z-20 h-[calc(100vh-72px)] md:h-full w-full max-w-[336px] flex flex-col"
+                className="absolute md:relative z-20 h-[calc(100vh-88px)] md:h-full w-full max-w-[336px] flex flex-col"
                 style={{
                   background: "#ffffff",
                   borderRight: "1px solid #f1f5f9",

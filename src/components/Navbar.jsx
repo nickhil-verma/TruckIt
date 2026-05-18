@@ -58,13 +58,16 @@ export default function Navbar() {
     >
       <div className="flex items-center justify-between px-5 py-3">
         {/* Logo */}
-        <Link href="/" className="flex items-center hover:opacity-90 transition-opacity">
+        <Link href="/" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
           <img 
             src="/LOGO.png" 
             alt="TruckIt Logo" 
-            className="h-14 w-auto object-contain"
+            className="h-9 w-auto object-contain"
             style={{ mixBlendMode: "multiply" }}
           />
+          <span className="font-extrabold text-gray-900 tracking-tight text-lg font-serif">
+            TRUCK<span className="text-orange-500">IT</span>
+          </span>
         </Link>
 
         {/* Desktop links */}
