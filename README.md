@@ -11,31 +11,87 @@
 
 ---
 
-### 🖥️ Application Screenshot Showcase
+### 🖥️ High-Fidelity Application Showcase
 
-<img width="2854" height="1286" alt="Screenshot 2026-05-18 212252" src="https://github.com/user-attachments/assets/fbabb5e3-c178-48b8-85cf-f957711a6480" />
+We have captured step-by-step screenshots demonstrating the customer booking workspace, driver onboarding, and client-side OCR verification workflows:
 
-<img width="2868" height="1384" alt="Screenshot 2026-05-18 212318" src="https://github.com/user-attachments/assets/4ee3d430-1201-4324-abd2-76186f5e6283" />
+#### 1. Interactive Landing & Fluid Search Panel
+* **Context:** The main landing hero section featuring responsive CTAs, geocoding input bars, and modern typography layouts.
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/fbabb5e3-c178-48b8-85cf-f957711a6480" alt="Landing and Search Panel" width="100%" style="border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 15px 35px -10px rgba(0,0,0,0.1);" />
+</p>
 
-<img width="2846" height="1340" alt="Screenshot 2026-05-18 212330" src="https://github.com/user-attachments/assets/1987c3b7-67bb-4c7c-94f0-cb3182030734" />
-
-<img width="2838" height="1356" alt="Screenshot 2026-05-18 212343" src="https://github.com/user-attachments/assets/45ebbc54-84b7-439c-a899-eb793658d3e7" />
-
-<img width="2832" height="1354" alt="Screenshot 2026-05-18 212356" src="https://github.com/user-attachments/assets/7466141e-f8cb-45a8-8f58-6fd48b26553e" />
-
-<img width="2456" height="1400" alt="Screenshot 2026-05-18 212426" src="https://github.com/user-attachments/assets/6f1bd03b-3016-4926-94c6-10d2e1fbca8c" />
-
-<img width="2814" height="1350" alt="Screenshot 2026-05-18 212456" src="https://github.com/user-attachments/assets/e1a2440b-e349-417a-a6ef-c8c537b32482" />
-
-<img width="2852" height="1296" alt="Screenshot 2026-05-18 212523" src="https://github.com/user-attachments/assets/d17ba485-3460-4506-b8f1-12c92d8948e4" />
-
-<img width="2864" height="1292" alt="Screenshot 2026-05-18 212534" src="https://github.com/user-attachments/assets/5a3f21cf-79b2-422c-acc8-0f225f2c501a" />
-
-<img width="2846" height="1288" alt="Screenshot 2026-05-18 212549" src="https://github.com/user-attachments/assets/e3a815df-677b-40e1-bf20-92a42997645e" />
-
-
- 
 ---
+
+#### 2. Live Geocoded Mapping & Route Search Dashboard
+* **Context:** Integrated Leaflet map showing responsive route path vectors, geolocated coordinates, and dynamic mileage feedback.
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/4ee3d430-1201-4324-abd2-76186f5e6283" alt="Mapping & Route Search" width="100%" style="border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 15px 35px -10px rgba(0,0,0,0.1);" />
+</p>
+
+---
+
+#### 3. Stop Point Building & Fare Calculator
+* **Context:** Interface panel enabling customers to build multi-destination routes, view calculated geocoding coordinates, and preview fleet pricing dynamically.
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/1987c3b7-67bb-4c7c-94f0-cb3182030734" alt="Stop Point Building" width="100%" style="border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 15px 35px -10px rgba(0,0,0,0.1);" />
+</p>
+
+---
+
+#### 4. Apple-Style GSAP Feature Showcase Lock
+* **Context:** The pinned ScrollTrigger showcase begins as the background smoothly morphs to dark to lock attention.
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/45ebbc54-84b7-439c-a899-eb793658d3e7" alt="GSAP Showcase Entrance" width="100%" style="border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 15px 35px -10px rgba(0,0,0,0.1);" />
+</p>
+
+---
+
+#### 5. Pitch-Black Showcase Screen & Glowing Highlights
+* **Context:** Entire showcase canvas enters pure, immersive dark mode (#000000) with glowing contrast details highlighting active points.
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/7466141e-f8cb-45a8-8f58-6fd48b26553e" alt="Pitch Black Interactive Showcase" width="100%" style="border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 15px 35px -10px rgba(0,0,0,0.1);" />
+</p>
+
+---
+
+#### 6. Driver Settings Dashboard & Onboarding Panel
+* **Context:** Registration dashboard where drivers input license plates and register accounts under strict regex checking filters.
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/6f1bd03b-3016-4926-94c6-10d2e1fbca8c" alt="Driver Onboarding Form" width="100%" style="border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 15px 35px -10px rgba(0,0,0,0.1);" />
+</p>
+
+---
+
+#### 7. Driving License Image Upload Workspace
+* **Context:** Secure driving document upload module prompting drivers to provide IDs for lightweight client-side verification.
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/e1a2440b-e349-417a-a6ef-c8c537b32482" alt="License Image Upload" width="100%" style="border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 15px 35px -10px rgba(0,0,0,0.1);" />
+</p>
+
+---
+
+#### 8. Client-Side OCR Tesseract.js Text Scanning
+* **Context:** Driver verification engine running lightweight browser-based Tesseract OCR text scans on uploaded licenses.
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/d17ba485-3460-4506-b8f1-12c92d8948e4" alt="OCR Tesseract Scanning" width="100%" style="border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 15px 35px -10px rgba(0,0,0,0.1);" />
+</p>
+
+---
+
+#### 9. Driver Profile & Blue Verified Badge Tick
+* **Context:** Driver workspace displays verified checklists and awards the official Blue Tick Badge (`✓ Verified Driver`) to verified operators.
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/5a3f21cf-79b2-422c-acc8-0f225f2c501a" alt="Driver Blue Verified Tick" width="100%" style="border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 15px 35px -10px rgba(0,0,0,0.1);" />
+</p>
+
+---
+
+#### 10. Context-Sensitive Customer-Driver Chat Panel
+* **Context:** Live WebSockets messaging workspace. The chat locks secure buttons dynamically and displays the counter-party details at the top header.
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/e3a815df-677b-40e1-bf20-92a42997645e" alt="WebSocket Secure Chat Panel" width="100%" style="border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 15px 35px -10px rgba(0,0,0,0.1);" />
+</p>
 
 ## 🗺️ System Design & Architecture
 
