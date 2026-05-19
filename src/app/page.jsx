@@ -4,6 +4,7 @@ import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion"
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useGSAP } from "@gsap/react";
+import Lenis from "lenis";
 
 if (typeof window !== "undefined") {
   gsap.registerPlugin(ScrollTrigger);
@@ -175,8 +176,24 @@ export default function TruckItLanding() {
   const heroOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
 
   useGSAP(() => {
+    // 0. Initialize Lenis Smooth Scroll
+    const lenis = new Lenis({
+      duration: 1.2,
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      smoothWheel: true,
+    });
+
+    lenis.on("scroll", ScrollTrigger.update);
+
+    const tickerCb = (time) => {
+      lenis.raf(time * 1000);
+    };
+
+    gsap.ticker.add(tickerCb);
+    gsap.ticker.lagSmoothing(0);
+
     // 1. Hero Entrance Animations
-    gsap.fromTo(".gsap-hero-el", 
+    gsap.fromTo(".gsap-hero-el",
       { y: 35, opacity: 0 },
       { y: 0, opacity: 1, duration: 0.85, stagger: 0.12, ease: "power3.out" }
     );
@@ -213,78 +230,98 @@ export default function TruckItLanding() {
         duration: 0.6,
         ease: "power2.out"
       }, 0)
-      .to(".gsap-showcase-title", {
-        color: "#ffffff",
-        duration: 0.6,
-      }, 0)
-      .to(".gsap-showcase-desc", {
-        color: "#94a3b8", // slate-400
-        duration: 0.6,
-      }, 0)
-      .to(".gsap-showcase-pill", {
-        backgroundColor: "#1e293b", // slate-800
-        borderColor: "#334155", // slate-700
-        duration: 0.6,
-      }, 0)
-      // Transition all list headers immediately to white so they are visible
-      .to([".gsap-detail-item-header-1", ".gsap-detail-item-header-2", ".gsap-detail-item-header-3"], {
-        color: "#ffffff",
-        duration: 0.5,
-      }, 0)
-      // Transition all list bodies immediately to light grey so they are visible
-      .to([".gsap-detail-item-body-1", ".gsap-detail-item-body-2", ".gsap-detail-item-body-3"], {
-        color: "#cbd5e1",
-        duration: 0.5,
-      }, 0)
-      .fromTo(".gsap-ui-card", 
-        { scale: 0.95, y: 30 },
-        { scale: 1, y: 0, duration: 0.8, ease: "power2.out" },
-        0
-      );
+        .to(".gsap-showcase-title", {
+          color: "#ffffff",
+          duration: 0.6,
+        }, 0)
+        .to(".gsap-showcase-desc", {
+          color: "#94a3b8", // slate-400
+          duration: 0.6,
+        }, 0)
+        .to(".gsap-showcase-pill", {
+          backgroundColor: "#1e293b", // slate-800
+          borderColor: "#334155", // slate-700
+          duration: 0.6,
+        }, 0)
+        // Transition all list headers immediately to white so they are visible
+        .to([".gsap-detail-item-header-1", ".gsap-detail-item-header-2", ".gsap-detail-item-header-3"], {
+          color: "#ffffff",
+          duration: 0.5,
+        }, 0)
+        // Transition all list bodies immediately to light grey so they are visible
+        .to([".gsap-detail-item-body-1", ".gsap-detail-item-body-2", ".gsap-detail-item-body-3"], {
+          color: "#cbd5e1",
+          duration: 0.5,
+        }, 0)
+        .fromTo(".gsap-ui-card",
+          { scale: 0.95, y: 30 },
+          { scale: 1, y: 0, duration: 0.8, ease: "power2.out" },
+          0
+        );
 
-      // B. Transition from Text 1 to Text 2 active
+      // B. Transition from Text 1 to Text 2 active (cross-fade image 1 to 2)
       pinTl.to(".gsap-detail-item-1", {
         opacity: 0.2,
         borderColor: "#334155", // slate-700
         duration: 0.6,
         ease: "power1.inOut"
       }, "+=0.4")
-      .to(".gsap-detail-item-2", {
-        opacity: 1,
-        borderColor: "#f97316", // orange-500
-        duration: 0.6,
-        ease: "power1.inOut"
-      }, "<")
-      .to(".gsap-detail-item-header-2", {
-        color: "#ffffff",
-        duration: 0.3,
-      }, "<")
-      .to(".gsap-detail-item-body-2", {
-        color: "#cbd5e1",
-        duration: 0.3,
-      }, "<");
+        .to(".gsap-detail-item-2", {
+          opacity: 1,
+          borderColor: "#f97316", // orange-500
+          duration: 0.6,
+          ease: "power1.inOut"
+        }, "<")
+        .to(".gsap-detail-item-header-2", {
+          color: "#ffffff",
+          duration: 0.3,
+        }, "<")
+        .to(".gsap-detail-item-body-2", {
+          color: "#cbd5e1",
+          duration: 0.3,
+        }, "<")
+        .to(".gsap-showcase-img-1", {
+          opacity: 0,
+          duration: 0.6,
+          ease: "power1.inOut"
+        }, "<")
+        .to(".gsap-showcase-img-2", {
+          opacity: 1,
+          duration: 0.6,
+          ease: "power1.inOut"
+        }, "<");
 
-      // C. Transition from Text 2 to Text 3 active
+      // C. Transition from Text 2 to Text 3 active (cross-fade image 2 to 3)
       pinTl.to(".gsap-detail-item-2", {
         opacity: 0.2,
         borderColor: "#334155",
         duration: 0.6,
         ease: "power1.inOut"
       }, "+=0.4")
-      .to(".gsap-detail-item-3", {
-        opacity: 1,
-        borderColor: "#f97316",
-        duration: 0.6,
-        ease: "power1.inOut"
-      }, "<")
-      .to(".gsap-detail-item-header-3", {
-        color: "#ffffff",
-        duration: 0.3,
-      }, "<")
-      .to(".gsap-detail-item-body-3", {
-        color: "#cbd5e1",
-        duration: 0.3,
-      }, "<");
+        .to(".gsap-detail-item-3", {
+          opacity: 1,
+          borderColor: "#f97316",
+          duration: 0.6,
+          ease: "power1.inOut"
+        }, "<")
+        .to(".gsap-detail-item-header-3", {
+          color: "#ffffff",
+          duration: 0.3,
+        }, "<")
+        .to(".gsap-detail-item-body-3", {
+          color: "#cbd5e1",
+          duration: 0.3,
+        }, "<")
+        .to(".gsap-showcase-img-2", {
+          opacity: 0,
+          duration: 0.6,
+          ease: "power1.inOut"
+        }, "<")
+        .to(".gsap-showcase-img-3", {
+          opacity: 1,
+          duration: 0.6,
+          ease: "power1.inOut"
+        }, "<");
 
       // D. Smooth exit transition back to light grey theme before unpinning!
       pinTl.to(".gsap-showcase-section", {
@@ -292,39 +329,49 @@ export default function TruckItLanding() {
         duration: 0.6,
         ease: "power2.inOut"
       }, "+=0.4")
-      .to(".gsap-showcase-title", {
-        color: "#111827", // gray-900
-        duration: 0.6,
-      }, "<")
-      .to(".gsap-showcase-desc", {
-        color: "#6b7280", // gray-500
-        duration: 0.6,
-      }, "<")
-      .to(".gsap-showcase-pill", {
-        backgroundColor: "#fff7ed", // orange-50
-        borderColor: "#fed7aa", // orange-200
-        duration: 0.6,
-      }, "<")
-      .to(".gsap-detail-item-header-3", {
-        color: "#111827", // gray-900
-        duration: 0.4,
-      }, "<")
-      .to(".gsap-detail-item-body-3", {
-        color: "#6b7280", // gray-500
-        duration: 0.4,
-      }, "<")
-      .to([".gsap-detail-item-header-1", ".gsap-detail-item-header-2"], {
-        color: "#111827",
-        duration: 0.4,
-      }, "<")
-      .to([".gsap-detail-item-body-1", ".gsap-detail-item-body-2"], {
-        color: "#6b7280",
-        duration: 0.4,
-      }, "<")
-      .to([".gsap-detail-item-1", ".gsap-detail-item-2"], {
-        borderColor: "#e5e7eb", // original border-gray-200
-        duration: 0.6,
-      }, "<");
+        .to(".gsap-showcase-title", {
+          color: "#111827", // gray-900
+          duration: 0.6,
+        }, "<")
+        .to(".gsap-showcase-desc", {
+          color: "#6b7280", // gray-500
+          duration: 0.6,
+        }, "<")
+        .to(".gsap-showcase-pill", {
+          backgroundColor: "#fff7ed", // orange-50
+          borderColor: "#fed7aa", // orange-200
+          duration: 0.6,
+        }, "<")
+        .to(".gsap-detail-item-header-3", {
+          color: "#111827", // gray-900
+          duration: 0.4,
+        }, "<")
+        .to(".gsap-detail-item-body-3", {
+          color: "#6b7280", // gray-500
+          duration: 0.4,
+        }, "<")
+        .to([".gsap-detail-item-header-1", ".gsap-detail-item-header-2"], {
+          color: "#111827",
+          duration: 0.4,
+        }, "<")
+        .to([".gsap-detail-item-body-1", ".gsap-detail-item-body-2"], {
+          color: "#6b7280",
+          duration: 0.4,
+        }, "<")
+        .to([".gsap-detail-item-1", ".gsap-detail-item-2"], {
+          borderColor: "#e5e7eb", // original border-gray-200
+          duration: 0.6,
+        }, "<")
+        .to(".gsap-showcase-img-3", {
+          opacity: 0,
+          duration: 0.6,
+          ease: "power2.inOut"
+        }, "<")
+        .to(".gsap-showcase-img-1", {
+          opacity: 1,
+          duration: 0.6,
+          ease: "power2.inOut"
+        }, "<");
     }
 
     // 3. Sections ScrollTrigger Animations
@@ -349,6 +396,11 @@ export default function TruckItLanding() {
         );
       }
     });
+
+    return () => {
+      gsap.ticker.remove(tickerCb);
+      lenis.destroy();
+    };
   }, { scope: landingContainerRef });
 
   return (
@@ -417,7 +469,7 @@ export default function TruckItLanding() {
         {/* ── PINNED SHOWCASE ──────────────────── */}
         <section ref={pinSectionRef} className="gsap-showcase-section relative w-full min-h-screen bg-gray-50 flex items-center justify-center py-20 px-4 overflow-hidden border-b border-gray-100">
           <div className="mx-auto max-w-6xl w-full grid grid-cols-1 md:grid-cols-12 gap-12 items-center">
-            
+
             {/* The Booking UI Card itself (pinned on the left/center) */}
             <div className="md:col-span-7 flex justify-center w-full">
               <div className="gsap-ui-card w-full max-w-2xl rounded-3xl border border-gray-100 bg-white shadow-[0_25px_60px_-15px_rgba(0,0,0,0.15)] hover:shadow-[0_30px_70px_-10px_rgba(249,115,22,0.15)] transition-shadow duration-500 overflow-hidden">
@@ -433,17 +485,29 @@ export default function TruckItLanding() {
                     ⚡ Live Booking System
                   </span>
                 </div>
-                <img 
-                  src="/UI.png" 
-                  alt="TruckIt Booking Interface" 
-                  className="w-full h-auto object-cover"
-                />
+                <div className="relative w-full overflow-hidden">
+                  <img
+                    src="/UI.png"
+                    alt="TruckIt Booking Interface - Route Selection"
+                    className="gsap-showcase-img-1 w-full h-auto object-cover"
+                  />
+                  <img
+                    src="/UI2.png"
+                    alt="TruckIt Booking Interface - Fleet Selection"
+                    className="gsap-showcase-img-2 absolute inset-0 w-full h-full object-cover opacity-0"
+                  />
+                  <img
+                    src="/UI3.png"
+                    alt="TruckIt Booking Interface - Transit Hubs"
+                    className="gsap-showcase-img-3 absolute inset-0 w-full h-full object-cover opacity-0"
+                  />
+                </div>
               </div>
             </div>
 
             {/* UI Feature Details Card (scrolled on the right) */}
             <div className="md:col-span-5 flex flex-col gap-8 text-left relative min-h-[350px]">
-              
+
               <div className="space-y-2">
                 <span className="gsap-showcase-pill inline-flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold tracking-widest text-orange-500 uppercase w-max">
                   Interactive Showcase
@@ -458,7 +522,7 @@ export default function TruckItLanding() {
 
               {/* The Text Cards that will be scrolled/revealed sequentially */}
               <div className="relative flex-1">
-                
+
                 {/* Detail 1 */}
                 <div className="gsap-detail-item-1 space-y-2 border-l-2 border-orange-500 pl-4 py-1">
                   <h4 className="gsap-detail-item-header-1 font-bold text-gray-900 text-lg">01 · Smart Route Geocoding</h4>
@@ -497,6 +561,92 @@ export default function TruckItLanding() {
             <StatCard value="1,200+" label="Verified truck partners" icon="🚛" />
             <StatCard value="4.9★" label="Average driver rating" icon="⭐" />
             <StatCard value="28" label="States covered" icon="🗺️" />
+          </div>
+        </section>
+
+        {/* ── GROUND INSIGHTS GALLERY ── */}
+        <section id="ground-insights" className="py-24 px-4 bg-white border-b border-gray-100 gsap-section">
+          <div className="mx-auto max-w-5xl">
+            <FadeUp className="flex flex-col items-center text-center mb-14">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
+                <span className="text-xs font-bold uppercase tracking-widest text-orange-600 bg-orange-50 px-3.5 py-1 rounded-full border border-orange-100">
+                  Field Research & Market Insights
+                </span>
+              </div>
+              <h2 className="text-4xl font-extrabold text-gray-900 font-serif">
+                Designed on the Road, for the Road
+              </h2>
+              <p className="text-sm text-gray-500 mt-3 max-w-xl mx-auto leading-relaxed">
+                We spend hours at highways and transport hubs talking to driver partners to build a platform that solves real-world logistics challenges.
+              </p>
+            </FadeUp>
+
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-stretch mt-8 text-left">
+              {/* Landscape Image - Interviewing on the Ground */}
+              <div className="md:col-span-7 flex flex-col justify-between rounded-3xl border border-gray-100 bg-white p-4 shadow-[0_15px_40px_-15px_rgba(0,0,0,0.08)] hover:shadow-[0_20px_50px_-10px_rgba(249,115,22,0.12)] transition-all duration-300 group hover:-translate-y-1">
+                <div className="overflow-hidden rounded-2xl relative">
+                  <img
+                    src="/prod_interview_landscape1.jpeg"
+                    alt="Teammate interviewing truck driver"
+                    className="w-full object-cover aspect-[16/10] group-hover:scale-[1.03] transition-transform duration-500"
+                  />
+                  <div className="absolute top-3 left-3 bg-black/70 backdrop-blur text-white text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-full font-semibold font-mono">
+                    📸 Field Log #14
+                  </div>
+                </div>
+                <div className="mt-4 flex-1 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
+                      <span>📍 JAIPUR-DELHI TRANSIT HUB (NH-48)</span>
+                    </div>
+                    <h4 className="text-lg font-bold text-gray-900 mt-1 leading-snug">
+                      Deep-diving into driver operational struggles
+                    </h4>
+                    <p className="text-sm text-gray-500 mt-2 leading-relaxed">
+                      Our product team speaking with drivers directly to map out route optimization problems and understand how broker delays impact their working capital.
+                    </p>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-gray-50 flex items-center gap-2">
+                    <span className="text-xs font-semibold text-orange-600 bg-orange-50 px-2.5 py-0.5 rounded-full">
+                      User Centered Design
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Portrait Image - Close up with Driver */}
+              <div className="md:col-span-5 flex flex-col justify-between rounded-3xl border border-gray-100 bg-white p-4 shadow-[0_15px_40px_-15px_rgba(0,0,0,0.08)] hover:shadow-[0_20px_50px_-10px_rgba(249,115,22,0.12)] transition-all duration-300 group hover:-translate-y-1 md:translate-y-6">
+                <div className="overflow-hidden rounded-2xl relative">
+                  <img
+                    src="/prod_interview_portrait.jpeg"
+                    alt="Truck driver interview close-up"
+                    className="w-full object-cover aspect-[3/4] group-hover:scale-[1.03] transition-transform duration-500"
+                  />
+                  <div className="absolute top-3 left-3 bg-black/70 backdrop-blur text-white text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-full font-semibold font-mono">
+                    🎙️ Direct Feedback
+                  </div>
+                </div>
+                <div className="mt-4 flex-1 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
+                      <span>💬 DRIVER SATNAM SINGH</span>
+                    </div>
+                    <h4 className="text-lg font-bold text-gray-900 mt-1 leading-snug">
+                      "Instant pay keeps us moving without stress."
+                    </h4>
+                    <p className="text-sm text-gray-500 mt-2 leading-relaxed italic">
+                      "Traditional brokers hold our freight balance for weeks. With TruckIt's instant wallet transfer, we get paid immediately on delivery, allowing us to buy diesel and send money to our families on time."
+                    </p>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-gray-50 flex items-center gap-2">
+                    <span className="text-xs font-semibold text-green-600 bg-green-50 px-2.5 py-0.5 rounded-full">
+                      98% Driver Satisfaction
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -596,23 +746,65 @@ export default function TruckItLanding() {
         <section id="testimonials" className="py-28 px-4 bg-gray-50/50 gsap-section">
           <div className="mx-auto max-w-5xl">
             <FadeUp className="text-center mb-14">
-              <Pill>Testimonials</Pill>
+              <Pill>User Research Survey</Pill>
               <h2 className="mt-4 text-4xl font-extrabold tracking-tight text-gray-900 font-serif">
-                Trusted by thousands.
+                Loved by our early community
               </h2>
-              <p className="mt-3 text-gray-500 max-w-md mx-auto text-sm leading-relaxed">
-                From solo movers to large enterprises — here's what our customers say about TruckIt.
+              <p className="mt-3 text-gray-500 max-w-2xl mx-auto text-sm leading-relaxed">
+                We surveyed manufacturers, wholesalers, e-commerce sellers, and transporters across India to validate and solve their biggest freight logistics pain points.
               </p>
             </FadeUp>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {[
-                { name: "Rahul Mehta", role: "Furniture Business, Jaipur", avatar: "RM", quote: "We used to spend hours calling transporters. TruckIt cut that to 2 minutes. The live tracking alone is worth it — our clients love knowing exactly where their delivery is.", rating: 5, delay: 0 },
-                { name: "Priya Iyer", role: "E-commerce Seller, Chennai", avatar: "PI", quote: "Shipped 12 orders this month using TruckIt's medium trucks. Zero cancellations, zero damage. The pricing is genuinely transparent — what you see is what you pay.", rating: 5, delay: 0.08 },
-                { name: "Deepak Sharma", role: "Construction Contractor, Delhi", avatar: "DS", quote: "Needed a heavy truck on short notice for a site in Gurugram. Booked in under a minute, driver arrived on time. Will never go back to the old way.", rating: 5, delay: 0.16 },
-                { name: "Ananya Joshi", role: "Home Mover, Bengaluru", avatar: "AJ", quote: "Moving flats is already stressful. TruckIt made the logistics part completely stress-free. The mini truck was clean, the driver was professional, and the price was fair.", rating: 5, delay: 0.24 },
-                { name: "Kiran Reddy", role: "Logistics Manager, Hyderabad", avatar: "KR", quote: "We integrated TruckIt into our supply chain ops. The API is clean, delivery windows are reliable, and the support team is genuinely responsive. Highly recommend.", rating: 5, delay: 0.32 },
-                { name: "Neeraj Gupta", role: "Retailer, Pune", avatar: "NG", quote: "I was skeptical at first but the ₹18/km for the medium truck is actually cheaper than what we were paying our regular transporter. Switching was the best decision.", rating: 4, delay: 0.4 },
+                {
+                  name: "Nainy verma",
+                  role: "E-commerce Seller",
+                  avatar: "NV",
+                  quote: "Showing future price trends before booking (like 'Book now for ₹4,200 or wait 3 hours → ₹3,500 likely') is exactly what we need. Driver KYC, live tracking, and fast booking are essential to trust a platform.",
+                  rating: 5,
+                  delay: 0
+                },
+                {
+                  name: "Shravan Gadavi",
+                  role: "Wholesaler & Distributor",
+                  avatar: "SG",
+                  quote: "Dealing with weekly shipments, high transport costs and empty return trips are our biggest concerns. Full driver KYC, cargo insurance, and live tracking make the marketplace highly reliable.",
+                  rating: 5,
+                  delay: 0.08
+                },
+                {
+                  name: "Kalash Kaushal",
+                  role: "Manufacturer (Daily Logistics)",
+                  avatar: "KK",
+                  quote: "Wasted empty return trips, delay issues, and lack of real-time tracking are major day-to-day hassles. A simple and fast booking flow with secure payments and transparent pricing solves everything.",
+                  rating: 5,
+                  delay: 0.16
+                },
+                {
+                  name: "Prateek Tyagi",
+                  role: "Retail Owner",
+                  avatar: "PT",
+                  quote: "We deal with monthly truck transport and often suffer from trust issues. Having automated driver KYC verification, a ratings system, and one-click repeat bookings gives us massive ease of mind.",
+                  rating: 5,
+                  delay: 0.24
+                },
+                {
+                  name: "Mohit Srivastava",
+                  role: "Exporter (Daily Logistics)",
+                  avatar: "MS",
+                  quote: "Transportation cost is a huge burden. Using empty returning trucks for LTL shipments is a brilliant idea. Add to that transparent pricing and 24/7 customer support, and this becomes a must-have app.",
+                  rating: 5,
+                  delay: 0.32
+                },
+                {
+                  name: "Srishti Gupta ",
+                  role: "Wholesaler / Distributor",
+                  avatar: "SG",
+                  quote: "Trucks not being available when needed and poor communication with drivers are common broker headaches. Direct truck booking and direct comparisons with market value will optimize our margins.",
+                  rating: 5,
+                  delay: 0.4
+                },
               ].map((t) => (
                 <TestimonialCard key={t.name} {...t} />
               ))}
@@ -620,25 +812,6 @@ export default function TruckItLanding() {
           </div>
         </section>
 
-        {/* ── TRUST BAND ───────────────────────── */}
-        <section className="py-16 px-4 border-y border-gray-100 gsap-section">
-          <div className="mx-auto max-w-5xl">
-            <FadeUp className="text-center mb-10">
-              <p className="text-xs font-semibold tracking-widest text-gray-400 uppercase">
-                Trusted by companies across India
-              </p>
-            </FadeUp>
-            <div className="flex flex-wrap items-center justify-center gap-x-12 gap-y-6">
-              {["Flipkart Partners", "Amazon Flex", "BigBasket", "Meesho Logistics", "Delhivery", "Reliance Retail"].map((b, i) => (
-                <FadeUp key={b} delay={i * 0.06}>
-                  <span className="text-sm font-semibold text-gray-300 hover:text-gray-500 transition-colors cursor-default">
-                    {b}
-                  </span>
-                </FadeUp>
-              ))}
-            </div>
-          </div>
-        </section>
 
         {/* ── FAQ ──────────────────────────────── */}
         <section id="faq" className="py-28 px-4 gsap-section">
@@ -705,9 +878,9 @@ export default function TruckItLanding() {
           <div className="mx-auto max-w-5xl grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
             <div className="col-span-2 md:col-span-1">
               <div className="flex items-center gap-2 mb-3 hover:opacity-90 transition-opacity">
-                <img 
-                  src="/LOGO.png" 
-                  alt="TruckIt Logo" 
+                <img
+                  src="/LOGO.png"
+                  alt="TruckIt Logo"
                   className="h-8 w-auto object-contain"
                   style={{ mixBlendMode: "multiply" }}
                 />
@@ -750,4 +923,4 @@ export default function TruckItLanding() {
       </div>
     </>
   );
-}
+} 
