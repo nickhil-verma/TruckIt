@@ -7,4 +7,6 @@ const MessageSchema = new mongoose.Schema({
   status: { type: String, enum: ["sent", "delivered", "seen"], default: "sent" }
 }, { timestamps: true });
 
+MessageSchema.index({ tripId: 1, createdAt: 1 });
+
 export default mongoose.models.Message || mongoose.model("Message", MessageSchema);

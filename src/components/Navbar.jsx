@@ -41,7 +41,7 @@ export default function Navbar() {
     { name: "How It Works", href: "/#how-it-works" },
     { name: "Find Trips", href: "/find-trips" },
     { name: "Fleet", href: "/#fleet" },
-    { name: "Testimonials", href: "/#testimonials" },
+    { name: "Admin Portal", href: "/admin/finances" },
     { name: "FAQ", href: "/#faq" },
   ];
 
@@ -111,6 +111,10 @@ export default function Navbar() {
                       <div className="p-2 flex flex-col">
                         <Link href={user.role === "driver" ? "/driver-dashboard" : "/dashboard"} className="px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-600 rounded-xl transition-colors text-left font-medium" onClick={() => setDropdownOpen(false)}>
                           {user.role === "driver" ? "Driver Dashboard" : "Dashboard"}
+                        </Link>
+                        <Link href="/admin/finances" className="px-3 py-2 text-sm text-orange-600 hover:bg-orange-50 rounded-xl transition-colors text-left font-medium flex items-center justify-between" onClick={() => setDropdownOpen(false)}>
+                          <span>Admin Finances</span>
+                          <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-bold">HQ</span>
                         </Link>
                         <button onClick={handleLogout} className="px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-xl transition-colors text-left mt-1 font-medium">
                           Logout

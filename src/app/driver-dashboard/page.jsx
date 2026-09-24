@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import Navbar from "@/components/Navbar";
@@ -112,22 +112,49 @@ export default function DriverDashboard() {
 
   const router = useRouter();
 
-  const fetchTrips = (token) => {
-    // Fetch driver's active/past trips
-    fetch("/api/trips", { headers: { "Authorization": `Bearer ${token}` } })
-      .then(res => res.json())
-      .then(data => setTrips(data.trips || []));
+  const fetchTrips = async (token) => {
+    // Timeout safety fallback: never stay stuck on Loading...
+    const timeout = setTimeout(() => {
+      setLoading(false);
+    }, 6000);
 
-    // Fetch all pending requests
-    fetch("/api/trips?pending=true", { headers: { "Authorization": `Bearer ${token}` } })
-      .then(res => res.json())
-      .then(data => setPendingTrips(data.trips || []));
+    try {
+      const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+      const driverId = storedUser?.id || storedUser?._id;
 
-    // Fetch driver's posted empty routes
-    fetch(`/api/route-posts?driverId=${JSON.parse(localStorage.getItem("user")).id}`, { headers: { "Authorization": `Bearer ${token}` } })
-      .then(res => res.json())
-      .then(data => setPostedRoutes(data.routes || []))
-      .finally(() => setLoading(false));
+      const [tripsRes, pendingRes, routesRes] = await Promise.allSettled([
+        fetch("/api/trips", { headers: { "Authorization": `Bearer ${token}` } }),
+        fetch("/api/trips?pending=true", { headers: { "Authorization": `Bearer ${token}` } }),
+        driverId ? fetch(`/api/route-posts?driverId=${driverId}`, { headers: { "Authorization": `Bearer ${token}` } }) : Promise.resolve(null)
+      ]);
+
+      if (tripsRes.status === "fulfilled" && tripsRes.value) {
+        if (tripsRes.value.status === 401 || tripsRes.value.status === 400) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          toast.error("Session expired or invalid credentials. Please sign in again.");
+          router.push("/login");
+          return;
+        }
+        const data = await tripsRes.value.json();
+        setTrips(data.trips || []);
+      }
+
+      if (pendingRes.status === "fulfilled" && pendingRes.value) {
+        const data = await pendingRes.value.json();
+        setPendingTrips(data.trips || []);
+      }
+
+      if (routesRes.status === "fulfilled" && routesRes.value) {
+        const data = await routesRes.value.json();
+        setPostedRoutes(data.routes || []);
+      }
+    } catch (err) {
+      console.error("Error loading driver trips:", err);
+    } finally {
+      clearTimeout(timeout);
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -149,8 +176,14 @@ export default function DriverDashboard() {
     fetchTrips(token);
   }, [router]);
 
-  const activeTrips = trips.filter(t => ["accepted", "running"].includes(t.status));
-  const pastTrips = trips.filter(t => ["completed", "cancelled"].includes(t.status));
+  const activeTrips = useMemo(
+    () => trips.filter(t => ["accepted", "running"].includes(t.status)),
+    [trips]
+  );
+  const pastTrips = useMemo(
+    () => trips.filter(t => ["completed", "cancelled"].includes(t.status)),
+    [trips]
+  );
 
   // Compute stats for driver overview
   const totalCompletedTrips = pastTrips.filter(t => t.status === "completed").length;
@@ -200,93 +233,7 @@ export default function DriverDashboard() {
     return () => clearInterval(interval);
   }, [activeTab, selectedTrip]);
 
-  const lastMessageCountRef = useRef({});
-
-  // Background message monitoring for notifications
-  useEffect(() => {
-    if (!activeTrips || activeTrips.length === 0) return;
-
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
-    // Initialize counts if not set yet
-    activeTrips.forEach(trip => {
-      if (lastMessageCountRef.current[trip._id] === undefined) {
-        fetch(`/api/chat?tripId=${trip._id}`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        })
-          .then(res => res.json())
-          .then(data => {
-            if (data.messages) {
-              lastMessageCountRef.current[trip._id] = data.messages.length;
-            }
-          })
-          .catch(err => console.error(err));
-      }
-    });
-
-    const interval = setInterval(() => {
-      activeTrips.forEach(trip => {
-        fetch(`/api/chat?tripId=${trip._id}`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        })
-          .then(res => res.json())
-          .then(data => {
-            if (data.messages) {
-              const currentCount = lastMessageCountRef.current[trip._id] || 0;
-              const newCount = data.messages.length;
-
-              if (newCount > currentCount) {
-                const lastMsg = data.messages[newCount - 1];
-                // Check if last message was sent by the other party
-                if (lastMsg && lastMsg.senderId !== user?.id) {
-                  // Only show toast if not currently viewing this trip's chat
-                  if (!(activeTab === "chat" && selectedTrip?._id === trip._id)) {
-                    toast((t) => (
-                      <div className="flex flex-col gap-1.5 min-w-[250px]">
-                        <div className="font-bold text-gray-900 text-sm flex items-center gap-1.5">
-                          <span>💬</span> New message from Customer!
-                        </div>
-                        <div className="text-xs text-gray-500 font-medium">
-                          ID: {trip._id.slice(-6).toUpperCase()} ({trip.pickup.split(',')[0]} → {trip.dropoff.split(',')[0]})
-                        </div>
-                        <div className="text-xs text-gray-700 italic bg-slate-50 border-l-2 border-orange-500 pl-2 py-1 mt-1 rounded-r-md">
-                          "{lastMsg.text}"
-                        </div>
-                        <button
-                          onClick={() => {
-                            setSelectedTrip(trip);
-                            setActiveTab("chat");
-                            toast.dismiss(t.id);
-                          }}
-                          className="mt-2 text-xs font-bold text-orange-600 bg-orange-50 py-1.5 px-3 rounded-lg hover:bg-orange-100 transition-colors w-max"
-                        >
-                          Reply to Customer 👤
-                        </button>
-                      </div>
-                    ), {
-                      duration: 6000,
-                      position: "bottom-right",
-                      style: {
-                        background: '#ffffff',
-                        border: '1px solid #f3f4f6',
-                        borderRadius: '1.25rem',
-                        boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1)',
-                        padding: '12px'
-                      }
-                    });
-                  }
-                }
-                lastMessageCountRef.current[trip._id] = newCount;
-              }
-            }
-          })
-          .catch(err => console.error(err));
-      });
-    }, 4500); // Poll every 4.5 seconds
-
-    return () => clearInterval(interval);
-  }, [activeTrips, user, activeTab, selectedTrip]);
+  // Chat messages are only loaded on-demand when driver opens the Chat tab with an active trip selected
 
   const sendMessage = async (e) => {
     e.preventDefault();
@@ -1148,6 +1095,11 @@ export default function DriverDashboard() {
                       <div>
                         <div className="flex items-center gap-2 mb-1">
                           <span className="bg-yellow-100 text-yellow-700 text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-full">New Request</span>
+                          {trip.paymentStatus === "paid" && (
+                            <span className="bg-emerald-100 text-emerald-800 text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-full">
+                              💳 Prepaid (Razorpay)
+                            </span>
+                          )}
                           <span className="text-sm font-medium text-gray-500">Customer: {trip.userId?.name || "Anonymous"} (⭐ {trip.userId?.rating || "5.0"})</span>
                         </div>
                         <h3 className="font-bold text-lg text-gray-900">{trip.pickup} <span className="text-orange-500">→</span> {trip.dropoff}</h3>
@@ -1179,6 +1131,11 @@ export default function DriverDashboard() {
                       <div>
                         <div className="flex items-center gap-2 mb-1">
                           <span className="bg-orange-100 text-orange-700 text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-full">{trip.status}</span>
+                          {trip.paymentStatus === "paid" && (
+                            <span className="bg-emerald-100 text-emerald-800 text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-full">
+                              💳 Paid Online
+                            </span>
+                          )}
                           <span className="text-sm font-bold text-gray-400">ID: {trip._id.slice(-6).toUpperCase()}</span>
                         </div>
                         <h3 className="font-bold text-lg text-gray-900">{trip.pickup} <span className="text-orange-500">→</span> {trip.dropoff}</h3>

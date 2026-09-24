@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import mongoose from "mongoose";
 import connectToDatabase from "@/lib/db";
 import RoutePost from "@/models/RoutePost";
 import User from "@/models/User";
@@ -13,12 +14,18 @@ export async function GET(req) {
     
     let routes;
     if (driverId) {
-      routes = await RoutePost.find({ driverId }).sort({ createdAt: -1 });
+      if (!mongoose.Types.ObjectId.isValid(driverId)) {
+        return NextResponse.json({ routes: [] }, { status: 200 });
+      }
+      routes = await RoutePost.find({ driverId }).sort({ createdAt: -1 }).lean();
     } else {
-      routes = await RoutePost.find({ status: "active" }).populate('driverId', 'name location truckNumber licenseNumber tripsDone reviewsCount').sort({ createdAt: -1 });
+      routes = await RoutePost.find({ status: "active" })
+        .populate('driverId', 'name location truckNumber licenseNumber tripsDone reviewsCount')
+        .sort({ createdAt: -1 })
+        .lean();
     }
     
-    return NextResponse.json({ routes }, { status: 200 });
+    return NextResponse.json({ routes: routes || [] }, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

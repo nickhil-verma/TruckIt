@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import mongoose from "mongoose";
 import connectToDatabase from "@/lib/db";
 import Trip from "@/models/Trip";
 import User from "@/models/User";
@@ -10,6 +11,10 @@ export async function GET(req) {
     const user = verifyToken(req);
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+    if (!user.id || !mongoose.Types.ObjectId.isValid(user.id)) {
+      return NextResponse.json({ error: "Invalid user token credentials" }, { status: 400 });
+    }
+
     await connectToDatabase();
     
     const url = new URL(req.url);
@@ -18,15 +23,24 @@ export async function GET(req) {
     let trips;
     if (user.role === "driver") {
         if (fetchPending === "true") {
-          trips = await Trip.find({ status: "pending" }).populate('userId', 'name').sort({ createdAt: -1 });
+          trips = await Trip.find({ status: "pending" })
+            .populate('userId', 'name')
+            .sort({ createdAt: -1 })
+            .lean();
         } else {
-          trips = await Trip.find({ driverId: user.id }).populate('userId', 'name').sort({ createdAt: -1 });
+          trips = await Trip.find({ driverId: user.id })
+            .populate('userId', 'name')
+            .sort({ createdAt: -1 })
+            .lean();
         }
     } else {
-        trips = await Trip.find({ userId: user.id }).populate('driverId', 'name avatar rating truckNumber licenseNumber tripsDone reviewsCount').sort({ createdAt: -1 });
+        trips = await Trip.find({ userId: user.id })
+          .populate('driverId', 'name avatar rating truckNumber licenseNumber tripsDone reviewsCount')
+          .sort({ createdAt: -1 })
+          .lean();
     }
     
-    return NextResponse.json({ trips }, { status: 200 });
+    return NextResponse.json({ trips: trips || [] }, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

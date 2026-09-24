@@ -40,6 +40,22 @@ async function getRouteDistance(a, b) {
   };
 }
 
+// ─── Razorpay Script Loader ──────────────────────────────────────────────────
+function loadRazorpayScript() {
+  return new Promise((resolve) => {
+    if (typeof window !== "undefined" && window.Razorpay) {
+      resolve(true);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TRUCK_TYPES = [
   { id: "mini",   label: "Mini",   sub: "1 Ton · City runs",   baseRate: 12, icon: "🛻", rating: 4.8, color: "#0ea5e9" },
@@ -159,6 +175,7 @@ export default function TruckItApp() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showReceipt, setShowReceipt] = useState(false);
   const [selectedViaStops, setSelectedViaStops] = useState([]);
+  const [bookedTrip, setBookedTrip] = useState(null);
   
   // Empty routes logic
   const [bookingMode, setBookingMode] = useState("fresh"); // "fresh", "empty"
@@ -221,7 +238,7 @@ export default function TruckItApp() {
   }, [from, to]);
 
   const handleBook = async () => {
-    if (!distanceKm) return;
+    if (!distanceKm || !totalPrice) return;
     
     const token = localStorage.getItem("token");
     if (!token) {
@@ -230,35 +247,119 @@ export default function TruckItApp() {
       return;
     }
 
+    const userData = JSON.parse(localStorage.getItem("user") || "{}");
+
     setBookingLoading(true);
     try {
-      const res = await fetch("/api/trips", {
+      // 1. Ensure Razorpay Checkout script is loaded
+      const isLoaded = await loadRazorpayScript();
+      if (!isLoaded) {
+        throw new Error("Unable to load Razorpay payment SDK. Please check your internet connection.");
+      }
+
+      // 2. Request order creation from server
+      const orderRes = await fetch("/api/razorpay/create-order", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}`
         },
         body: JSON.stringify({
+          amount: totalPrice,
+          pickup: from,
+          dropoff: to,
+          truckType: selectedTruckData.label
+        })
+      });
+
+      const orderData = await orderRes.json();
+      if (!orderRes.ok) {
+        throw new Error(orderData.error || "Failed to initialize payment with Razorpay");
+      }
+
+      // 3. Launch Razorpay Checkout Modal (in test mode)
+      const options = {
+        key: orderData.keyId,
+        amount: orderData.amount,
+        currency: orderData.currency || "INR",
+        name: "TRUCKIT Logistics",
+        description: `${selectedTruckData.label} Freight (${from.split(',')[0]} → ${to.split(',')[0]})`,
+        image: "/LOGO.png",
+        order_id: orderData.orderId,
+        prefill: {
+          name: userData.name || "Test Customer",
+          email: userData.email || "customer@truckit.test",
+          contact: "9876543210"
+        },
+        notes: {
           pickup: from,
           dropoff: to,
           truckType: selectedTruckData.label,
-          price: totalPrice,
-          distance: distanceKm,
-          viaStops: selectedViaStops
-        }),
+          mode: "test_mode"
+        },
+        theme: {
+          color: "#f97316"
+        },
+        handler: async function (response) {
+          try {
+            toast.loading("Verifying payment in test mode...", { id: "rzp-verify" });
+            const verifyRes = await fetch("/api/razorpay/verify-payment", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                razorpayOrderId: response.razorpay_order_id,
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpaySignature: response.razorpay_signature,
+                tripData: {
+                  pickup: from,
+                  dropoff: to,
+                  truckType: selectedTruckData.label,
+                  price: totalPrice,
+                  distance: distanceKm,
+                  viaStops: selectedViaStops
+                }
+              })
+            });
+
+            const verifyData = await verifyRes.json();
+            toast.dismiss("rzp-verify");
+
+            if (!verifyRes.ok) {
+              throw new Error(verifyData.error || "Payment verification failed");
+            }
+
+            setBookedTrip(verifyData.trip);
+            setBooked(true);
+            setShowReceipt(true);
+            toast.success("Payment verified! Booking confirmed via Razorpay test mode 🎉");
+          } catch (verifyErr) {
+            toast.dismiss("rzp-verify");
+            toast.error(verifyErr.message || "Payment verification failed");
+          } finally {
+            setBookingLoading(false);
+          }
+        },
+        modal: {
+          ondismiss: function () {
+            setBookingLoading(false);
+            toast("Payment cancelled or closed", { icon: "ℹ️" });
+          }
+        }
+      };
+
+      const razorpayInstance = new window.Razorpay(options);
+      razorpayInstance.on("payment.failed", function (failureResponse) {
+        setBookingLoading(false);
+        toast.error(`Payment failed: ${failureResponse.error?.description || "Payment was declined"}`);
       });
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to book");
-      }
+      razorpayInstance.open();
 
-      setBooked(true);
-      setShowReceipt(true);
-      toast.success("Truck booked successfully!");
     } catch (err) {
-      toast.error(err.message);
-    } finally {
+      toast.error(err.message || "Payment initialization failed");
       setBookingLoading(false);
     }
   };
@@ -519,6 +620,29 @@ export default function TruckItApp() {
 
                 {/* ── Book button ── */}
                 <div style={{ padding: "16px 18px 22px", marginTop: "auto" }}>
+                  {distanceKm && (
+                    <div style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "8px 12px",
+                      marginBottom: "12px",
+                      background: "#fffbeb",
+                      border: "1px solid #fde68a",
+                      borderRadius: "10px",
+                      fontSize: "12px",
+                      color: "#92400e"
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 600 }}>
+                        <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#f59e0b", display: "inline-block" }}></span>
+                        <span>Razorpay Test Mode</span>
+                      </div>
+                      <span style={{ fontSize: "10.5px", background: "#fef3c7", padding: "2px 6px", borderRadius: "4px", fontWeight: 700, color: "#b45309" }}>
+                        Test Cards · UPI
+                      </span>
+                    </div>
+                  )}
+
                   <AnimatePresence mode="wait">
                     {!booked ? (
                       <motion.button
@@ -547,8 +671,8 @@ export default function TruckItApp() {
                           opacity: bookingLoading ? 0.7 : 1,
                         }}
                       >
-                        {bookingLoading ? "Booking..." : (distanceKm
-                          ? `Book ${selectedTruckData.icon} ${selectedTruckData.label} · ₹${totalPrice?.toLocaleString()}`
+                        {bookingLoading ? "Connecting to Razorpay..." : (distanceKm
+                          ? `Pay & Book · ₹${totalPrice?.toLocaleString()}`
                           : "Search a route first")}
                       </motion.button>
                     ) : (
@@ -758,6 +882,29 @@ export default function TruckItApp() {
                   <span className="text-gray-950 font-bold">{selectedTruckData.icon} {selectedTruckData.label}</span>
                 </div>
                 <div className="flex justify-between text-xs sm:text-sm items-center">
+                  <span className="text-gray-400 font-medium">Payment Status</span>
+                  <span className="text-emerald-700 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-full text-[10px] flex items-center gap-1 border border-emerald-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    PAID (Razorpay Test Mode)
+                  </span>
+                </div>
+                {bookedTrip?.razorpayPaymentId && (
+                  <div className="flex justify-between text-xs sm:text-sm items-center">
+                    <span className="text-gray-400 font-medium">Payment ID</span>
+                    <span className="text-gray-700 font-mono text-[10.5px] bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                      {bookedTrip.razorpayPaymentId}
+                    </span>
+                  </div>
+                )}
+                {bookedTrip?.razorpayOrderId && (
+                  <div className="flex justify-between text-xs sm:text-sm items-center">
+                    <span className="text-gray-400 font-medium">Order ID</span>
+                    <span className="text-gray-700 font-mono text-[10.5px] bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                      {bookedTrip.razorpayOrderId}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between text-xs sm:text-sm items-center">
                   <span className="text-gray-400 font-medium">Road Permit / E-Way</span>
                   <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full text-[10px]">GENERATED (ACTIVE)</span>
                 </div>
@@ -791,17 +938,22 @@ export default function TruckItApp() {
                 </div>
               </div>
 
+              {/* Razorpay Test note */}
+              <div className="text-[11px] text-center text-amber-800 bg-amber-50/90 rounded-xl p-2.5 border border-amber-200/80 -mt-1 font-medium">
+                💳 Paid via <strong>Razorpay Test Mode</strong>. No real currency deducted. Order & signature verified.
+              </div>
+
               {/* Barcode representation */}
-              <div className="flex flex-col items-center mt-1">
+              <div className="flex flex-col items-center mt-0.5">
                 <div 
-                  className="h-10 w-full max-w-[240px]" 
+                  className="h-9 w-full max-w-[240px]" 
                   style={{
                     background: "repeating-linear-gradient(90deg, #111827, #111827 2px, transparent 2px, transparent 5px, #111827 5px, #111827 8px, transparent 8px, transparent 10px)",
                     opacity: 0.85
                   }} 
                 />
                 <span className="text-[10px] text-gray-450 font-mono tracking-[0.25em] mt-1.5">
-                  TRK-{Math.floor(100000 + Math.random() * 900000)}
+                  {bookedTrip?._id ? `TRK-${bookedTrip._id.slice(-6).toUpperCase()}` : `TRK-${Math.floor(100000 + Math.random() * 900000)}`}
                 </span>
               </div>
 

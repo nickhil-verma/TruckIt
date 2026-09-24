@@ -1,10 +1,25 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import toast from "react-hot-toast";
 import { LayoutDashboard, Truck, CheckCircle, MessageSquare, CreditCard, Settings, Search, Check, CheckCheck, Clock } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
+
+function loadRazorpayScript() {
+  return new Promise((resolve) => {
+    if (typeof window !== "undefined" && window.Razorpay) {
+      resolve(true);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
 
 export default function Dashboard() {
   const [trips, setTrips] = useState([]);
@@ -31,20 +46,51 @@ export default function Dashboard() {
       router.push("/login");
       return;
     }
-    setUser(JSON.parse(localStorage.getItem("user") || "{}"));
+    const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+    if (storedUser.role === "driver") {
+      router.push("/driver-dashboard");
+      return;
+    }
+    setUser(storedUser);
+
+    // Timeout safety fallback: never stay stuck on Loading...
+    const timeout = setTimeout(() => {
+      setLoading(false);
+    }, 6000);
 
     fetch("/api/trips", {
       headers: { "Authorization": `Bearer ${token}` }
     })
-      .then(res => res.json())
-      .then(data => {
+      .then(async (res) => {
+        if (res.status === 401 || res.status === 400) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          toast.error("Session expired or invalid credentials. Please sign in again.");
+          router.push("/login");
+          return;
+        }
+        const data = await res.json();
         setTrips(data.trips || []);
+      })
+      .catch((err) => {
+        console.error("Error loading trips:", err);
+      })
+      .finally(() => {
+        clearTimeout(timeout);
         setLoading(false);
       });
+
+    return () => clearTimeout(timeout);
   }, [router]);
 
-  const ongoingTrips = trips.filter(t => ["pending", "accepted", "running"].includes(t.status));
-  const pastTrips = trips.filter(t => ["completed", "cancelled"].includes(t.status));
+  const ongoingTrips = useMemo(
+    () => trips.filter(t => ["pending", "accepted", "running"].includes(t.status)),
+    [trips]
+  );
+  const pastTrips = useMemo(
+    () => trips.filter(t => ["completed", "cancelled"].includes(t.status)),
+    [trips]
+  );
 
   const handleDeleteTrip = async (tripId) => {
     if (!confirm("Are you sure you want to cancel this request?")) return;
@@ -63,6 +109,114 @@ export default function Dashboard() {
       }
     } catch (err) {
       toast.error("Error cancelling trip");
+    }
+  };
+
+  const handlePayTrip = async (tripToPay) => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      toast.error("Please log in to continue");
+      return;
+    }
+
+    try {
+      const isLoaded = await loadRazorpayScript();
+      if (!isLoaded) {
+        toast.error("Unable to load Razorpay SDK. Check internet connection.");
+        return;
+      }
+
+      toast.loading("Preparing Razorpay test checkout...", { id: "rzp-init" });
+      const orderRes = await fetch("/api/razorpay/create-order", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          amount: tripToPay.price,
+          pickup: tripToPay.pickup,
+          dropoff: tripToPay.dropoff,
+          truckType: tripToPay.truckType,
+          tripId: tripToPay._id
+        })
+      });
+
+      const orderData = await orderRes.json();
+      toast.dismiss("rzp-init");
+
+      if (!orderRes.ok) {
+        throw new Error(orderData.error || "Failed to create payment order");
+      }
+
+      const options = {
+        key: orderData.keyId,
+        amount: orderData.amount,
+        currency: orderData.currency || "INR",
+        name: "TRUCKIT Logistics",
+        description: `Payment for trip: ${tripToPay.pickup.split(',')[0]} → ${tripToPay.dropoff.split(',')[0]}`,
+        image: "/LOGO.png",
+        order_id: orderData.orderId,
+        prefill: {
+          name: user?.name || "Customer",
+          email: user?.email || "customer@truckit.test",
+          contact: "9876543210"
+        },
+        theme: {
+          color: "#f97316"
+        },
+        handler: async function (response) {
+          try {
+            toast.loading("Verifying test payment...", { id: "rzp-verify-trip" });
+            const verifyRes = await fetch("/api/razorpay/verify-payment", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                razorpayOrderId: response.razorpay_order_id,
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpaySignature: response.razorpay_signature,
+                tripData: {
+                  tripId: tripToPay._id
+                }
+              })
+            });
+
+            const verifyData = await verifyRes.json();
+            toast.dismiss("rzp-verify-trip");
+
+            if (!verifyRes.ok) {
+              throw new Error(verifyData.error || "Payment verification failed");
+            }
+
+            toast.success("Payment completed successfully in Razorpay Test Mode! 💳🎉");
+            setTrips(prev => prev.map(t => t._id === tripToPay._id ? { ...t, ...verifyData.trip } : t));
+            if (selectedInvoiceTrip && selectedInvoiceTrip._id === tripToPay._id) {
+              setSelectedInvoiceTrip(verifyData.trip);
+            }
+          } catch (e) {
+            toast.dismiss("rzp-verify-trip");
+            toast.error(e.message || "Payment verification error");
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            toast("Payment cancelled or closed", { icon: "ℹ️" });
+          }
+        }
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on("payment.failed", (err) => {
+        toast.error(`Payment failed: ${err.error?.description || "Declined"}`);
+      });
+      rzp.open();
+
+    } catch (err) {
+      toast.dismiss("rzp-init");
+      toast.error(err.message || "Failed to launch payment");
     }
   };
 
@@ -95,93 +249,7 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, [activeTab, selectedTrip]);
 
-  const lastMessageCountRef = useRef({});
-
-  // Background message monitoring for notifications
-  useEffect(() => {
-    if (!ongoingTrips || ongoingTrips.length === 0) return;
-
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
-    // Initialize counts if not set yet
-    ongoingTrips.forEach(trip => {
-      if (lastMessageCountRef.current[trip._id] === undefined) {
-        fetch(`/api/chat?tripId=${trip._id}`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        })
-          .then(res => res.json())
-          .then(data => {
-            if (data.messages) {
-              lastMessageCountRef.current[trip._id] = data.messages.length;
-            }
-          })
-          .catch(err => console.error(err));
-      }
-    });
-
-    const interval = setInterval(() => {
-      ongoingTrips.forEach(trip => {
-        fetch(`/api/chat?tripId=${trip._id}`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        })
-          .then(res => res.json())
-          .then(data => {
-            if (data.messages) {
-              const currentCount = lastMessageCountRef.current[trip._id] || 0;
-              const newCount = data.messages.length;
-
-              if (newCount > currentCount) {
-                const lastMsg = data.messages[newCount - 1];
-                // Check if last message was sent by the other party
-                if (lastMsg && lastMsg.senderId !== user?.id) {
-                  // Only show toast if not currently viewing this trip's chat
-                  if (!(activeTab === "chat" && selectedTrip?._id === trip._id)) {
-                    toast((t) => (
-                      <div className="flex flex-col gap-1.5 min-w-[250px]">
-                        <div className="font-bold text-gray-900 text-sm flex items-center gap-1.5">
-                          <span>💬</span> New message for trip!
-                        </div>
-                        <div className="text-xs text-gray-500 font-medium">
-                          ID: {trip._id.slice(-6).toUpperCase()} ({trip.pickup.split(',')[0]} → {trip.dropoff.split(',')[0]})
-                        </div>
-                        <div className="text-xs text-gray-700 italic bg-slate-50 border-l-2 border-orange-500 pl-2 py-1 mt-1 rounded-r-md">
-                          "{lastMsg.text}"
-                        </div>
-                        <button
-                          onClick={() => {
-                            setSelectedTrip(trip);
-                            setActiveTab("chat");
-                            toast.dismiss(t.id);
-                          }}
-                          className="mt-2 text-xs font-bold text-orange-600 bg-orange-50 py-1.5 px-3 rounded-lg hover:bg-orange-100 transition-colors w-max"
-                        >
-                          Reply to Driver 🚛
-                        </button>
-                      </div>
-                    ), {
-                      duration: 6000,
-                      position: "bottom-right",
-                      style: {
-                        background: '#ffffff',
-                        border: '1px solid #f3f4f6',
-                        borderRadius: '1.25rem',
-                        boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1)',
-                        padding: '12px'
-                      }
-                    });
-                  }
-                }
-                lastMessageCountRef.current[trip._id] = newCount;
-              }
-            }
-          })
-          .catch(err => console.error(err));
-      });
-    }, 4500); // Poll every 4.5 seconds
-
-    return () => clearInterval(interval);
-  }, [ongoingTrips, user, activeTab, selectedTrip]);
+  // Chat messages are only loaded on-demand when user opens the Chat tab with an active trip selected
 
   const sendMessage = async (e) => {
     e.preventDefault();
@@ -356,6 +424,9 @@ export default function Dashboard() {
                                 <span className={`text-[9px] uppercase font-black px-1.5 py-0.5 rounded ${trip.status === 'pending' ? 'bg-yellow-100 text-yellow-755 font-bold' : 'bg-green-100 text-green-700 font-bold'}`}>
                                   {trip.status}
                                 </span>
+                                <span className={`text-[9px] uppercase font-black px-1.5 py-0.5 rounded ${trip.paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                                  {trip.paymentStatus === 'paid' ? '💳 Paid' : 'Pending Payment'}
+                                </span>
                                 {trip.driverId && (
                                   <button
                                     onClick={() => setSelectedDriverProfile(trip.driverId)}
@@ -418,6 +489,9 @@ export default function Dashboard() {
                       <div>
                         <div className="flex items-center gap-2 mb-1">
                           <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-full ${trip.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>{trip.status}</span>
+                          <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-full ${trip.paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {trip.paymentStatus === 'paid' ? '💳 Paid (Razorpay)' : 'Payment Pending'}
+                          </span>
                           <span className="text-sm font-bold text-gray-400">ID: {trip._id.slice(-6).toUpperCase()}</span>
                         </div>
                         <h3 className="font-bold text-lg text-gray-900">{trip.pickup} <span className="text-orange-500">→</span> {trip.dropoff}</h3>
@@ -470,6 +544,14 @@ export default function Dashboard() {
                             Track Live
                           </button>
                         </div>
+                        {trip.paymentStatus !== "paid" && (
+                          <button
+                            onClick={() => handlePayTrip(trip)}
+                            className="px-4 py-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-colors shadow-sm flex items-center justify-center gap-1.5"
+                          >
+                            💳 Pay with Razorpay · ₹{trip.price}
+                          </button>
+                        )}
                         {trip.status === "pending" && (
                           <button onClick={() => handleDeleteTrip(trip._id)} className="px-4 py-1.5 w-full bg-red-50 text-red-600 font-bold rounded-xl text-xs hover:bg-red-100 transition-colors border border-red-100">
                             Cancel Request
@@ -525,8 +607,9 @@ export default function Dashboard() {
                         <th className="px-6 py-4 font-semibold">Date</th>
                         <th className="px-6 py-4 font-semibold">Route</th>
                         <th className="px-6 py-4 font-semibold">Status</th>
+                        <th className="px-6 py-4 font-semibold">Payment</th>
                         <th className="px-6 py-4 font-semibold text-right">Amount</th>
-                        <th className="px-6 py-4 font-semibold text-center">Invoice</th>
+                        <th className="px-6 py-4 font-semibold text-center">Invoice / Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -542,14 +625,29 @@ export default function Dashboard() {
                           <td className="px-6 py-4">
                             <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-full ${trip.status === 'completed' ? 'bg-green-100 text-green-700' : trip.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'}`}>{trip.status}</span>
                           </td>
+                          <td className="px-6 py-4">
+                            <span className={`text-[10px] uppercase font-black px-2.5 py-0.5 rounded-full ${trip.paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                              {trip.paymentStatus === 'paid' ? 'PAID (Razorpay)' : 'PENDING'}
+                            </span>
+                          </td>
                           <td className="px-6 py-4 text-right font-bold text-gray-900">₹{trip.price}</td>
                           <td className="px-6 py-4 text-center">
-                            <button
-                              onClick={() => setSelectedInvoiceTrip(trip)}
-                              className="px-3.5 py-1 bg-orange-50 text-orange-600 hover:bg-orange-100 text-xs font-bold rounded-lg transition-colors border border-orange-100 shadow-sm"
-                            >
-                              View Bill 📄
-                            </button>
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                onClick={() => setSelectedInvoiceTrip(trip)}
+                                className="px-3.5 py-1 bg-orange-50 text-orange-600 hover:bg-orange-100 text-xs font-bold rounded-lg transition-colors border border-orange-100 shadow-sm"
+                              >
+                                View Bill 📄
+                              </button>
+                              {trip.paymentStatus !== "paid" && (
+                                <button
+                                  onClick={() => handlePayTrip(trip)}
+                                  className="px-3 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-bold rounded-lg transition-colors border border-emerald-200 shadow-sm"
+                                >
+                                  Pay Now
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -848,6 +946,33 @@ export default function Dashboard() {
                   <span className="text-gray-950 font-bold">{selectedInvoiceTrip.truckType}</span>
                 </div>
                 <div className="flex justify-between text-xs sm:text-sm items-center">
+                  <span className="text-gray-400 font-medium">Payment Status</span>
+                  <span className={`font-bold px-2.5 py-0.5 rounded-full text-[10px] flex items-center gap-1 ${
+                    selectedInvoiceTrip.paymentStatus === 'paid' 
+                      ? 'text-emerald-700 bg-emerald-50 border border-emerald-200' 
+                      : 'text-amber-700 bg-amber-50 border border-amber-200'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${selectedInvoiceTrip.paymentStatus === 'paid' ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`}></span>
+                    {selectedInvoiceTrip.paymentStatus === 'paid' ? 'PAID (Razorpay Test Mode)' : 'PAYMENT PENDING'}
+                  </span>
+                </div>
+                {selectedInvoiceTrip.razorpayPaymentId && (
+                  <div className="flex justify-between text-xs sm:text-sm items-center">
+                    <span className="text-gray-400 font-medium">Payment ID</span>
+                    <span className="text-gray-700 font-mono text-[10.5px] bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                      {selectedInvoiceTrip.razorpayPaymentId}
+                    </span>
+                  </div>
+                )}
+                {selectedInvoiceTrip.razorpayOrderId && (
+                  <div className="flex justify-between text-xs sm:text-sm items-center">
+                    <span className="text-gray-400 font-medium">Order ID</span>
+                    <span className="text-gray-700 font-mono text-[10.5px] bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                      {selectedInvoiceTrip.razorpayOrderId}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between text-xs sm:text-sm items-center">
                   <span className="text-gray-400 font-medium">Road Permit / E-Way</span>
                   <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full text-[10px]">GENERATED (ACTIVE)</span>
                 </div>
@@ -876,15 +1001,22 @@ export default function Dashboard() {
                 </div>
                 <div className="border-t border-dashed border-gray-200 my-1" />
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-950 font-black text-sm uppercase tracking-wide">Grand Total Paid</span>
+                  <span className="text-gray-950 font-black text-sm uppercase tracking-wide">Grand Total</span>
                   <span className="text-orange-600 font-black text-xl">₹{selectedInvoiceTrip.price?.toLocaleString()}</span>
                 </div>
               </div>
 
+              {/* Razorpay Test note */}
+              <div className="text-[11px] text-center text-amber-800 bg-amber-50/90 rounded-xl p-2.5 border border-amber-200/80 -mt-1 font-medium">
+                💳 {selectedInvoiceTrip.paymentStatus === 'paid' 
+                  ? "Paid via Razorpay Test Mode. Simulated test payment verified." 
+                  : "Payment pending. You can settle this invoice securely via Razorpay Test Mode."}
+              </div>
+
               {/* Barcode representation */}
-              <div className="flex flex-col items-center mt-1">
+              <div className="flex flex-col items-center mt-0.5">
                 <div 
-                  className="h-10 w-full max-w-[240px]" 
+                  className="h-9 w-full max-w-[240px]" 
                   style={{
                     background: "repeating-linear-gradient(90deg, #111827, #111827 2px, transparent 2px, transparent 5px, #111827 5px, #111827 8px, transparent 8px, transparent 10px)",
                     opacity: 0.85
@@ -896,19 +1028,28 @@ export default function Dashboard() {
               </div>
 
               {/* Action buttons */}
-              <div className="grid grid-cols-2 gap-4 mt-1">
+              <div className="grid grid-cols-2 gap-3 mt-1">
                 <button
                   onClick={() => window.print()}
                   className="py-3 px-4 rounded-xl border border-gray-200 hover:border-gray-300 text-gray-700 font-bold text-sm bg-white hover:bg-slate-50 transition-colors shadow-sm flex items-center justify-center gap-1.5"
                 >
                   🖨️ Print Bill
                 </button>
-                <button
-                  onClick={() => setSelectedInvoiceTrip(null)}
-                  className="py-3 px-4 rounded-xl text-white font-bold text-sm bg-orange-500 hover:bg-orange-600 transition-colors shadow-md shadow-orange-200 flex items-center justify-center"
-                >
-                  Close
-                </button>
+                {selectedInvoiceTrip.paymentStatus !== "paid" ? (
+                  <button
+                    onClick={() => handlePayTrip(selectedInvoiceTrip)}
+                    className="py-3 px-4 rounded-xl text-white font-bold text-sm bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-md shadow-emerald-200 flex items-center justify-center gap-1.5"
+                  >
+                    💳 Pay ₹{selectedInvoiceTrip.price}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setSelectedInvoiceTrip(null)}
+                    className="py-3 px-4 rounded-xl text-white font-bold text-sm bg-orange-500 hover:bg-orange-600 transition-colors shadow-md shadow-orange-200 flex items-center justify-center"
+                  >
+                    Close
+                  </button>
+                )}
              </div>
             </motion.div>
           </motion.div>
