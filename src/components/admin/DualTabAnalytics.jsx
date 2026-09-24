@@ -5,7 +5,7 @@ import {
   Building2, 
   CheckCircle2, 
   ArrowUpRight, 
-  DollarSign, 
+  IndianRupee, 
   CreditCard, 
   TrendingUp, 
   ShieldCheck, 
@@ -80,9 +80,9 @@ export default function DualTabAnalytics({
                 <th className="py-3.5 px-4">Verified Fleet Operator</th>
                 <th className="py-3.5 px-4">Fleet / Status</th>
                 <th className="py-3.5 px-4 text-center">Trips Completed</th>
-                <th className="py-3.5 px-4 text-right">Lifetime Gross Generated</th>
-                <th className="py-3.5 px-4 text-right">Platform Cut Contributed</th>
-                <th className="py-3.5 px-4 text-right">Pending Withdrawal</th>
+                <th className="py-3.5 px-4 text-right">Lifetime Gross (₹)</th>
+                <th className="py-3.5 px-4 text-right">Platform Cut (₹)</th>
+                <th className="py-3.5 px-4 text-right">Pending Withdrawal (₹)</th>
                 <th className="py-3.5 px-4 text-right">Disbursement Action</th>
               </tr>
             </thead>
@@ -200,7 +200,7 @@ export default function DualTabAnalytics({
                 <th className="py-3.5 px-4">Enterprise Account</th>
                 <th className="py-3.5 px-4">Tier & Contracts</th>
                 <th className="py-3.5 px-4 text-center">Volume Booked</th>
-                <th className="py-3.5 px-4 text-right">Total Freight Spend</th>
+                <th className="py-3.5 px-4 text-right">Total Freight Spend (₹)</th>
                 <th className="py-3.5 px-4 text-right">Avg. Commission Margin</th>
                 <th className="py-3.5 px-4">Volume Discount Bracket</th>
                 <th className="py-3.5 px-4">Preferred Fleet</th>

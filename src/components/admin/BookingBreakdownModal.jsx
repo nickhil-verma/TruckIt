@@ -7,7 +7,7 @@ import {
   ShieldCheck, 
   CheckCircle2, 
   Download, 
-  DollarSign, 
+  IndianRupee, 
   Percent, 
   Receipt, 
   FileText, 
@@ -185,7 +185,7 @@ export default function BookingBreakdownModal({
           <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-3">
             <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                <DollarSign className="w-4 h-4 text-emerald-400" />
+                <IndianRupee className="w-4 h-4 text-emerald-400" />
                 Itemized Financial Waterfall Breakdown
               </span>
               <span className="text-[11px] font-semibold text-slate-400">
@@ -210,7 +210,7 @@ export default function BookingBreakdownModal({
               </div>
 
               <div className="flex justify-between py-1.5 bg-slate-900/90 px-3 rounded-lg text-white font-bold text-sm">
-                <span className="font-sans">1. Gross Booking Fare ($):</span>
+                <span className="font-sans">1. Gross Booking Fare (₹):</span>
                 <span className="text-white">{formatCurrency(financials.grossFare)}</span>
               </div>
 
@@ -220,7 +220,7 @@ export default function BookingBreakdownModal({
               </div>
 
               <div className="flex justify-between py-1 bg-slate-900/60 px-3 rounded-lg text-slate-300">
-                <span className="font-sans">3. Net Commissionable Base ($):</span>
+                <span className="font-sans">3. Net Commissionable Base (₹):</span>
                 <span className="font-semibold text-slate-200">{formatCurrency(financials.netCommissionableBase)}</span>
               </div>
 
@@ -236,7 +236,7 @@ export default function BookingBreakdownModal({
 
               <div className="flex justify-between py-2 px-3 rounded-lg bg-slate-800/80 border border-slate-700 text-white font-bold text-sm">
                 <span className="font-sans flex items-center gap-2">
-                  <span>5. Driver Net Payout ($):</span>
+                  <span>5. Driver Net Payout (₹):</span>
                   <span className="text-[11px] font-normal text-cyan-300 font-mono">
                     ({formatPercent(financials.driverShareRatio, 1)} Share)
                   </span>

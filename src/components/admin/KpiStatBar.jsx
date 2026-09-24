@@ -1,7 +1,7 @@
 "use client";
 import { 
   TrendingUp, 
-  DollarSign, 
+  IndianRupee, 
   Truck, 
   Users, 
   CheckCircle2, 
@@ -34,7 +34,7 @@ export default function KpiStatBar({ summary, takeRate = 15, isSimulated = false
             Gross Merchandise Value (GMV)
           </span>
           <div className="h-9 w-9 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400 shadow-sm">
-            <DollarSign className="w-5 h-5" />
+            <IndianRupee className="w-5 h-5" />
           </div>
         </div>
 

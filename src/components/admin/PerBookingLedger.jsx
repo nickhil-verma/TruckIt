@@ -135,11 +135,11 @@ export default function PerBookingLedger({
       "Destination",
       "Distance (km)",
       "Fleet Type",
-      "Gross Fare ($)",
+      "Gross Fare (₹)",
       "Statutory RTO (3%)",
-      "Platform Cut ($)",
+      "Platform Cut (₹)",
       "Platform Cut (%)",
-      "Driver Payout ($)",
+      "Driver Payout (₹)",
       "Driver Share (%)",
       "Settlement Status",
       "Razorpay ID",
@@ -298,7 +298,7 @@ export default function PerBookingLedger({
                 onClick={() => toggleSort("grossFare")}
               >
                 <div className="flex items-center justify-end gap-1.5">
-                  <span>Gross Fare</span>
+                  <span>Gross Fare (₹)</span>
                   <ArrowUpDown className="w-3 h-3" />
                 </div>
               </th>
@@ -307,7 +307,7 @@ export default function PerBookingLedger({
                 onClick={() => toggleSort("platformCut")}
               >
                 <div className="flex items-center justify-end gap-1.5">
-                  <span>Platform Cut</span>
+                  <span>Platform Cut (₹)</span>
                   <ArrowUpDown className="w-3 h-3" />
                 </div>
               </th>
@@ -316,7 +316,7 @@ export default function PerBookingLedger({
                 onClick={() => toggleSort("driverPayout")}
               >
                 <div className="flex items-center justify-end gap-1.5">
-                  <span>Driver Payout</span>
+                  <span>Driver Payout (₹)</span>
                   <ArrowUpDown className="w-3 h-3" />
                 </div>
               </th>

@@ -18,15 +18,15 @@ export function validateTruckPlate(plate) {
 }
 
 /**
- * Formats a numeric value into USD localized currency: $XX,XXX.XX
+ * Formats a numeric value into INR localized currency: ₹XX,XXX.XX
  * @param {number} amount 
  * @returns {string}
  */
 export function formatCurrency(amount) {
-  if (amount === undefined || amount === null || isNaN(amount)) return "$0.00";
-  return new Intl.NumberFormat("en-US", {
+  if (amount === undefined || amount === null || isNaN(amount)) return "₹0.00";
+  return new Intl.NumberFormat("en-IN", {
     style: "currency",
-    currency: "USD",
+    currency: "INR",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount);
@@ -45,11 +45,11 @@ export function formatPercent(value, decimals = 1) {
 
 /**
  * CORE MATHEMATICAL FORMULAS
- * 1. Gross Booking Fare ($) = Base Mileage Rate + Fleet Weight Surcharge + Fuel Surcharge
- * 2. Statutory Insurance / RTO Surcharge ($) = Gross Fare * 0.03 (3% default)
- * 3. Net Commissionable Base ($) = Gross Fare - Statutory Surcharge
- * 4. TRUCKIT Platform Cut / Commission ($) = Net Commissionable Base * (takeRatePercent / 100)
- * 5. Driver Net Payout ($) = Gross Fare - Platform Cut - Statutory Surcharge
+ * 1. Gross Booking Fare (₹) = Base Mileage Rate + Fleet Weight Surcharge + Fuel Surcharge
+ * 2. Statutory Insurance / RTO Surcharge (₹) = Gross Fare * 0.03 (3% default)
+ * 3. Net Commissionable Base (₹) = Gross Fare - Statutory Surcharge
+ * 4. TRUCKIT Platform Cut / Commission (₹) = Net Commissionable Base * (takeRatePercent / 100)
+ * 5. Driver Net Payout (₹) = Gross Fare - Platform Cut - Statutory Surcharge
  * 6. Driver Commission Share Ratio = Driver Payout / Gross Fare * 100%
  */
 export function calculateBookingFinancials(
