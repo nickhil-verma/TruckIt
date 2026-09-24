@@ -158,16 +158,18 @@ export async function GET(req) {
       const platformCut = Math.round(lifetimeGross * 0.15 * 0.97 * 100) / 100;
       const completedGross = driverTrips.filter(t => t.status === "completed").reduce((acc, curr) => acc + (Number(curr.price) || 0), 0);
       const pendingBalance = Math.round(completedGross * 0.82 * 100) / 100;
-
       const hasActiveTrip = driverTrips.some(t => ["accepted", "running"].includes(t.status));
-      const status = hasActiveTrip ? "Active on Highway" : (driverTrips.length > 0 ? "Available at Hub" : "Standby Fleet");
+      const isVerified = Boolean(d.truckNumber || d.licenseNumber || (idx < 7));
+      const status = isVerified 
+        ? (hasActiveTrip ? "Active on Highway" : (driverTrips.length > 0 ? "Available at Hub" : "Standby Fleet"))
+        : "KYC Audit Pending";
 
       return {
         id: d._id.toString(),
         name: d.name || `Driver ${idx + 1}`,
-        truckPlate: formatPlate(d.truckNumber, idx),
+        truckPlate: isVerified ? formatPlate(d.truckNumber, idx) : "Pending KYC",
         fleetType: (idx % 3 === 0 ? "Heavy-Haul" : idx % 3 === 1 ? "Medium" : "Reefer"),
-        isVerified: true,
+        isVerified,
         tripsCompleted,
         lifetimeGrossGenerated: lifetimeGross,
         totalPlatformCutContributed: platformCut,
@@ -186,9 +188,9 @@ export async function GET(req) {
       const totalVolumeBooked = custTrips.length;
       const totalFreightSpend = custTrips.reduce((acc, curr) => acc + (Number(curr.price) || 0), 0);
       
-      const tier = totalVolumeBooked >= 5 
+      const tier = totalVolumeBooked >= 3 
         ? "Enterprise Strategic Partner" 
-        : totalVolumeBooked >= 2 
+        : totalVolumeBooked >= 1 
         ? "Enterprise Tier 1" 
         : "Standard Logistics SLA";
 
@@ -200,7 +202,7 @@ export async function GET(req) {
         activeContracts: Math.max(0, custTrips.filter(t => ["accepted", "running", "pending"].includes(t.status)).length),
         totalVolumeBooked,
         avgCommissionMarginAchieved: 15.0,
-        discountBracket: totalVolumeBooked >= 5 ? "Volume Tier (10% Enterprise SLA)" : "Standard Freight Tariff",
+        discountBracket: totalVolumeBooked >= 3 ? "Volume Tier (5% Launch Discount)" : "Standard Freight Tariff",
         preferredFleet: "Medium",
         totalFreightSpend,
       };
@@ -213,7 +215,7 @@ export async function GET(req) {
 
     const summary = {
       gmv: totalGmv,
-      gmvWeeklyChangePercent: 18.4,
+      gmvWeeklyChangePercent: 9.2,
       platformNetRevenue: Math.round(totalPlatformRevenue * 100) / 100,
       driverDisbursedEarnings: Math.round(totalDriverEarnings * 100) / 100,
       activeVerifiedFleetRatio: {
