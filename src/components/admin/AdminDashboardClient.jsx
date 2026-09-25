@@ -278,7 +278,7 @@ export default function AdminDashboardClient({ initialTab = "finances" }) {
             <span>Command Center (Finances & Profit Engine)</span>
           </div>
           <div className="text-slate-500 font-mono text-[11px]">
-            Tesseract OCR v7.0 • Razorpay Escrow Direct • Node v20 / Next.js
+            Tesseract OCR v7.0 • Razorpay Escrow Direct • Google Analytics (GA4: G-9H83B3QSWN)
           </div>
         </div>
       </footer>

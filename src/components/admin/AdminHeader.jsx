@@ -73,6 +73,11 @@ export default function AdminHeader({
               <span className="w-2 h-2 rounded-full bg-blue-400"></span>
               <span>Tesseract OCR v7.0 Online</span>
             </div>
+
+            <div className="px-3 py-1.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs flex items-center gap-2 text-slate-300">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+              <span>GA4: G-9H83B3QSWN</span>
+            </div>
           </div>
 
           {/* Right: Actions & Return Navigation */}
