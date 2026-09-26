@@ -15,13 +15,14 @@ export const pageview = (url) => {
 };
 
 // Track specific user actions (signups, logins, searches, bookings, payments)
-export const trackEvent = ({ action, category, label, value, ...customParams }) => {
+export const trackEvent = ({ action, category, label, value, customParams, ...rest }) => {
   if (typeof window !== "undefined" && window.gtag) {
     window.gtag("event", action, {
       event_category: category,
       event_label: label,
       value: value,
-      ...customParams,
+      ...rest,
+      ...(customParams && typeof customParams === "object" ? customParams : {}),
     });
   }
 };

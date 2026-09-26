@@ -5,6 +5,7 @@ import Navbar from "@/components/Navbar";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
+import { trackEvent } from "@/lib/analytics";
 
 // ─── Geo helpers ──────────────────────────────────────────────────────────────
 async function geocode(query) {
@@ -176,6 +177,7 @@ export default function TruckItApp() {
   const [showReceipt, setShowReceipt] = useState(false);
   const [selectedViaStops, setSelectedViaStops] = useState([]);
   const [bookedTrip, setBookedTrip] = useState(null);
+  const trackedPurchasesRef = useRef(new Set());
   
   // Empty routes logic
   const [bookingMode, setBookingMode] = useState("fresh"); // "fresh", "empty"
@@ -220,22 +222,38 @@ export default function TruckItApp() {
       if (!b) throw new Error(`Could not find: "${to}"`);
       setCoordA(a);
       setCoordB(b);
+      let calculatedDistance = null;
       try {
         const route = await getRouteDistance(a, b);
         setDistanceKm(route.distanceKm);
         setDurationMin(route.durationMin);
         setRouteGeometry(route.geometry);
+        calculatedDistance = route.distanceKm;
       } catch {
         const d = haversineDistance(a, b);
         setDistanceKm(d);
         setDurationMin(Math.round((d / 60) * 60));
+        calculatedDistance = d;
+      }
+
+      // Track successful route search event (no PII sent)
+      if (calculatedDistance != null) {
+        trackEvent({
+          action: "route_search",
+          category: "booking",
+          label: bookingMode === "empty" ? "empty_return" : "fresh_booking",
+          customParams: {
+            truck_type: selectedTruckData.label,
+            distance_km: Math.round(calculatedDistance),
+          },
+        });
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
       setLoading(false);
     }
-  }, [from, to]);
+  }, [from, to, bookingMode, selectedTruckData]);
 
   const handleBook = async () => {
     if (!distanceKm || !totalPrice) return;
@@ -250,6 +268,21 @@ export default function TruckItApp() {
     const userData = JSON.parse(localStorage.getItem("user") || "{}");
 
     setBookingLoading(true);
+
+    // Track booking started event
+    trackEvent({
+      action: "booking_started",
+      category: "booking",
+      label: selectedTruckData.label,
+      value: totalPrice,
+      currency: "INR",
+      customParams: {
+        truck_type: selectedTruckData.label,
+        booking_mode: bookingMode,
+        distance_km: Math.round(distanceKm),
+      },
+    });
+
     try {
       // 1. Ensure Razorpay Checkout script is loaded
       const isLoaded = await loadRazorpayScript();
@@ -334,6 +367,25 @@ export default function TruckItApp() {
             setBookedTrip(verifyData.trip);
             setBooked(true);
             setShowReceipt(true);
+
+            // Track purchase event (prevent duplicates for same payment/booking)
+            const transactionId = response.razorpay_payment_id || verifyData?.trip?.razorpayPaymentId || verifyData?.trip?._id;
+            if (transactionId && !trackedPurchasesRef.current.has(transactionId)) {
+              trackedPurchasesRef.current.add(transactionId);
+              trackEvent({
+                action: "purchase",
+                category: "booking",
+                value: totalPrice,
+                currency: "INR",
+                transaction_id: transactionId,
+                customParams: {
+                  truck_type: selectedTruckData.label,
+                  booking_mode: bookingMode,
+                  distance_km: Math.round(distanceKm),
+                },
+              });
+            }
+
             toast.success("Payment verified! Booking confirmed via Razorpay test mode 🎉");
           } catch (verifyErr) {
             toast.dismiss("rzp-verify");
@@ -345,6 +397,11 @@ export default function TruckItApp() {
         modal: {
           ondismiss: function () {
             setBookingLoading(false);
+            trackEvent({
+              action: "booking_cancelled",
+              category: "booking",
+              label: "payment_cancelled",
+            });
             toast("Payment cancelled or closed", { icon: "ℹ️" });
           }
         }
@@ -353,6 +410,13 @@ export default function TruckItApp() {
       const razorpayInstance = new window.Razorpay(options);
       razorpayInstance.on("payment.failed", function (failureResponse) {
         setBookingLoading(false);
+        trackEvent({
+          action: "payment_failed",
+          category: "payment",
+          label: "razorpay_payment_failed",
+          value: totalPrice,
+          currency: "INR",
+        });
         toast.error(`Payment failed: ${failureResponse.error?.description || "Payment was declined"}`);
       });
 
