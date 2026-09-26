@@ -21,10 +21,12 @@ export default function KpiStatBar({ summary, takeRate = 15, isSimulated = false
     driverDisbursedEarnings = 0,
     activeVerifiedFleetRatio = { verified: 28, total: 32, percentage: 87.5 },
     pendingEscrowTotal = 0,
+    totalCustomers = 0,
+    customersWithBookings = 0,
   } = summary || {};
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-5">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 lg:gap-5">
       
       {/* 1. Gross Merchandise Value (GMV) */}
       <div className="relative group overflow-hidden rounded-2xl bg-slate-900/80 border border-slate-800/80 p-5 backdrop-blur-md hover:border-slate-700/80 transition-all duration-300">
@@ -147,6 +149,34 @@ export default function KpiStatBar({ summary, takeRate = 15, isSimulated = false
           </span>
           <span className="text-slate-400">
             {activeVerifiedFleetRatio.total - activeVerifiedFleetRatio.verified} Pending KYC
+          </span>
+        </div>
+      </div>
+
+      {/* 5. Total Customers */}
+      <div className="relative group overflow-hidden rounded-2xl bg-slate-900/80 border border-slate-800/80 p-5 backdrop-blur-md hover:border-purple-500/40 transition-all duration-300">
+        <div className="absolute top-0 right-0 w-28 h-28 bg-purple-500/5 rounded-full blur-2xl group-hover:bg-purple-500/10 transition-colors pointer-events-none"></div>
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-xs font-semibold tracking-wider uppercase text-slate-400">
+            Total Customers
+          </span>
+          <div className="h-9 w-9 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 shadow-sm">
+            <Users className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="flex items-baseline gap-2 mb-2">
+          <span className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+            {totalCustomers}
+          </span>
+        </div>
+
+        <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-800/60">
+          <span className="text-slate-300 font-medium">
+            {customersWithBookings} with bookings
+          </span>
+          <span className="text-slate-400">
+            Registered Accounts
           </span>
         </div>
       </div>

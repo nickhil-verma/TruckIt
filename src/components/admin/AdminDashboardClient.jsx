@@ -117,6 +117,12 @@ export default function AdminDashboardClient({ initialTab = "finances" }) {
     const activeBaseGmv = baselineGmv || totalGross || 0;
     const sim = simulateTakeRateImpact(activeBaseGmv, takeRate);
 
+    // Real customer metrics
+    const totalCustomers = customers.length;
+    const customersWithBookings = customers.filter(
+      (c) => (c.totalVolumeBooked || 0) > 0
+    ).length;
+
     return {
       gmv: isGlobalApplied ? sim.projectedGmv : totalGross,
       gmvWeeklyChangePercent: baseStats?.gmvWeeklyChangePercent || 18.4,
@@ -133,8 +139,10 @@ export default function AdminDashboardClient({ initialTab = "finances" }) {
       },
       effectiveTakeRate: takeRate,
       pendingEscrowTotal: Math.round(pendingEscrow * 10) / 10,
+      totalCustomers,
+      customersWithBookings,
     };
-  }, [bookings, drivers, takeRate, isGlobalApplied, baselineGmv, baseStats]);
+  }, [bookings, drivers, customers, takeRate, isGlobalApplied, baselineGmv, baseStats]);
 
   // Handler for Take-rate simulator
   const handleApplyRate = (newRate, asGlobal) => {
@@ -171,8 +179,8 @@ export default function AdminDashboardClient({ initialTab = "finances" }) {
         {loading && bookings.length === 0 ? (
           <div className="space-y-6 animate-pulse">
             {/* KPI Cards skeleton */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {[1, 2, 3, 4].map((i) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+              {[1, 2, 3, 4, 5].map((i) => (
                 <div key={i} className="h-32 rounded-2xl bg-slate-900/60 border border-slate-800/60 p-5">
                   <div className="h-4 w-24 bg-slate-800 rounded mb-4"></div>
                   <div className="h-8 w-36 bg-slate-800 rounded mb-2"></div>
