@@ -66,7 +66,7 @@ const TRUCK_TYPES = [
 
 // ─── Map component ────────────────────────────────────────────────────────────
 
-const LeafletMap = dynamic(() => import("@/components/LeafletMapComponent"), {
+const LeafletMap = dynamic(() => import("@/components/MapLibreMapComponent"), {
   ssr: false,
   loading: () => (
     <div className="w-full h-full min-h-[350px] bg-slate-50 border border-slate-100 rounded-3xl flex items-center justify-center">
