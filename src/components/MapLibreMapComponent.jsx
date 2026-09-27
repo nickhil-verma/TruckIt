@@ -1,9 +1,9 @@
 "use client";
-import { useEffect, useRef, useState, useCallback } from "react";
-import * as maplibregl from "maplibre-gl";
+import { useEffect, useRef, useState } from "react";
+import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
-const OPENFREEMAP_STYLE = "https://tiles.openfreemap.org/styles/bright";
+const OPENFREEMAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 
 /**
  * Normalizes coordinates into [lng, lat] GeoJSON standard format.
@@ -71,7 +71,7 @@ export default function MapLibreMapComponent({
       // Standard map navigation controls (zoom in/out, compass)
       map.addControl(new maplibregl.NavigationControl({ showCompass: true }), "bottom-right");
 
-      // Custom minimal attribution
+      // Custom attribution
       map.addControl(
         new maplibregl.AttributionControl({
           compact: true,
@@ -80,13 +80,24 @@ export default function MapLibreMapComponent({
         "bottom-left"
       );
 
-      map.on("load", () => {
+      const handleReady = () => {
         setMapLoaded(true);
-      });
+        try {
+          map.resize();
+        } catch (e) {}
+      };
+
+      if (map.isStyleLoaded()) {
+        handleReady();
+      } else {
+        map.once("style.load", handleReady);
+        map.once("load", handleReady);
+      }
 
       map.on("error", (e) => {
-        // Ignore non-fatal tile errors (e.g. edge-case network drop)
-        if (e && e.error && e.error.status === 404) return;
+        if (e && e.error && e.error.message && !e.error.message.includes("404")) {
+          console.warn("MapLibre map notice:", e.error.message);
+        }
       });
 
       map.on("click", (e) => {
@@ -96,12 +107,18 @@ export default function MapLibreMapComponent({
       });
 
       mapInstanceRef.current = map;
+      // Trigger initial resize after container mounts
+      setTimeout(() => {
+        try {
+          map.resize();
+        } catch (e) {}
+      }, 100);
     } catch (err) {
       console.error("MapLibre initialization error:", err);
       setMapError(true);
     }
 
-    // Resize observer to ensure map responds immediately to layout changes
+    // Resize observer to ensure map responds immediately to layout/sidebar changes
     let resizeObserver;
     if (window.ResizeObserver && mapContainerRef.current) {
       resizeObserver = new ResizeObserver(() => {
@@ -129,31 +146,32 @@ export default function MapLibreMapComponent({
   }, []);
 
   // 2. Helper to create DOM element for custom markers
-  const createMarkerElement = (label, bgGradient, shadowColor) => {
+  const createMarkerElement = (label, bgGradient, shadowColor, borderColor = "#ffffff") => {
     const el = document.createElement("div");
     el.className = "truckit-custom-marker";
-    el.style.width = "30px";
-    el.style.height = "36px";
+    el.style.width = "32px";
+    el.style.height = "38px";
     el.style.cursor = "pointer";
     el.style.display = "flex";
     el.style.flexDirection = "column";
     el.style.alignItems = "center";
     el.style.transform = "translate3d(0, 0, 0)";
+    el.style.zIndex = "10";
 
     el.innerHTML = `
       <div style="
-        width: 28px;
-        height: 28px;
+        width: 30px;
+        height: 30px;
         background: ${bgGradient};
-        border: 2.5px solid #ffffff;
+        border: 2.5px solid ${borderColor};
         border-radius: 50%;
-        box-shadow: 0 3px 12px ${shadowColor};
+        box-shadow: 0 4px 14px ${shadowColor};
         display: flex;
         align-items: center;
         justify-content: center;
         color: #ffffff;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 800;
         letter-spacing: -0.5px;
       ">
@@ -162,10 +180,10 @@ export default function MapLibreMapComponent({
       <div style="
         width: 0;
         height: 0;
-        border-left: 5px solid transparent;
-        border-right: 5px solid transparent;
-        border-top: 6px solid #ea580c;
-        margin-top: -1px;
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-top: 7px solid #ea580c;
+        margin-top: -2px;
       "></div>
     `;
 
@@ -194,7 +212,8 @@ export default function MapLibreMapComponent({
 
     // B. Place Marker A (Pickup)
     if (lngLatA) {
-      const elA = createMarkerElement("A", "linear-gradient(135deg, #f97316, #ea580c)", "rgba(249,115,22,0.5)");
+      const elA = createMarkerElement("A", "linear-gradient(135deg, #f97316, #ea580c)", "rgba(249,115,22,0.6)");
+      elA.title = "Pickup (Point A)";
       const markerA = new maplibregl.Marker({ element: elA, anchor: "bottom" })
         .setLngLat(lngLatA)
         .addTo(map);
@@ -203,8 +222,8 @@ export default function MapLibreMapComponent({
 
     // C. Place Marker B (Destination)
     if (lngLatB) {
-      const elB = createMarkerElement("B", "linear-gradient(135deg, #22c55e, #16a34a)", "rgba(22,163,74,0.5)");
-      // Update pointer color for destination marker
+      const elB = createMarkerElement("B", "linear-gradient(135deg, #22c55e, #16a34a)", "rgba(22,163,74,0.6)");
+      elB.title = "Destination (Point B)";
       const tip = elB.querySelector("div:last-child");
       if (tip) tip.style.borderTopColor = "#16a34a";
 
@@ -219,7 +238,8 @@ export default function MapLibreMapComponent({
       viaStopsCoords.forEach((viaCoord, idx) => {
         const lngLatVia = toLngLat(viaCoord);
         if (lngLatVia) {
-          const elVia = createMarkerElement(String(idx + 1), "linear-gradient(135deg, #a855f7, #9333ea)", "rgba(147,51,234,0.4)");
+          const elVia = createMarkerElement(String(idx + 1), "linear-gradient(135deg, #a855f7, #9333ea)", "rgba(147,51,234,0.5)");
+          elVia.title = `Stop #${idx + 1}`;
           const tip = elVia.querySelector("div:last-child");
           if (tip) tip.style.borderTopColor = "#9333ea";
 
@@ -233,7 +253,7 @@ export default function MapLibreMapComponent({
 
     // E. Draw Orange TruckIt Route
     const drawRouteOnMap = (coordinates) => {
-      if (!map || !map.getStyle()) return;
+      if (!map) return;
 
       const geojson = {
         type: "Feature",
@@ -244,75 +264,87 @@ export default function MapLibreMapComponent({
         }
       };
 
-      if (!map.getSource("truckit-route-source")) {
-        map.addSource("truckit-route-source", {
-          type: "geojson",
-          data: geojson
-        });
+      try {
+        if (!map.getSource("truckit-route-source")) {
+          map.addSource("truckit-route-source", {
+            type: "geojson",
+            data: geojson
+          });
+        } else {
+          const src = map.getSource("truckit-route-source");
+          if (src) src.setData(geojson);
+        }
 
         // Outer glow/casing layer
-        map.addLayer({
-          id: "truckit-route-casing",
-          type: "line",
-          source: "truckit-route-source",
-          layout: {
-            "line-join": "round",
-            "line-cap": "round"
-          },
-          paint: {
-            "line-color": "#c2410c",
-            "line-width": 8,
-            "line-opacity": 0.35,
-            "line-blur": 1
-          }
-        });
+        if (!map.getLayer("truckit-route-casing")) {
+          map.addLayer({
+            id: "truckit-route-casing",
+            type: "line",
+            source: "truckit-route-source",
+            layout: {
+              "line-join": "round",
+              "line-cap": "round"
+            },
+            paint: {
+              "line-color": "#c2410c",
+              "line-width": 8,
+              "line-opacity": 0.4
+            }
+          });
+        }
 
         // Vibrant orange main road line
-        map.addLayer({
-          id: "truckit-route-line",
-          type: "line",
-          source: "truckit-route-source",
-          layout: {
-            "line-join": "round",
-            "line-cap": "round"
-          },
-          paint: {
-            "line-color": "#f97316",
-            "line-width": 5,
-            "line-opacity": 0.95
-          }
-        });
-      } else {
-        const src = map.getSource("truckit-route-source");
-        if (src) src.setData(geojson);
+        if (!map.getLayer("truckit-route-line")) {
+          map.addLayer({
+            id: "truckit-route-line",
+            type: "line",
+            source: "truckit-route-source",
+            layout: {
+              "line-join": "round",
+              "line-cap": "round"
+            },
+            paint: {
+              "line-color": "#f97316",
+              "line-width": 5,
+              "line-opacity": 1
+            }
+          });
+        }
+      } catch (err) {
+        console.warn("Could not add route layers:", err);
       }
 
       // Auto-fit bounds
       if (coordinates.length > 0) {
-        const bounds = new maplibregl.LngLatBounds();
-        coordinates.forEach((coord) => bounds.extend(coord));
-        map.fitBounds(bounds, {
-          padding: { top: 60, bottom: 60, left: 60, right: 60 },
-          maxZoom: 14,
-          duration: 900
-        });
+        try {
+          map.resize();
+          const bounds = new maplibregl.LngLatBounds();
+          coordinates.forEach((coord) => bounds.extend(coord));
+          map.fitBounds(bounds, {
+            padding: { top: 70, bottom: 70, left: 70, right: 70 },
+            maxZoom: 14,
+            duration: 800
+          });
+        } catch (e) {}
       }
     };
 
     // Remove route layer if no route exists
     const clearRouteFromMap = () => {
-      if (!map || !map.getStyle()) return;
-      if (map.getSource("truckit-route-source")) {
-        const emptyGeojson = {
-          type: "Feature",
-          properties: {},
-          geometry: {
-            type: "LineString",
-            coordinates: []
-          }
-        };
-        map.getSource("truckit-route-source").setData(emptyGeojson);
-      }
+      if (!map) return;
+      try {
+        if (map.getSource("truckit-route-source")) {
+          const emptyGeojson = {
+            type: "Feature",
+            properties: {},
+            geometry: {
+              type: "LineString",
+              coordinates: []
+            }
+          };
+          map.getSource("truckit-route-source").setData(emptyGeojson);
+        }
+      } catch (e) {}
     };
 
     // If parent supplied routeGeometry, convert and draw immediately
