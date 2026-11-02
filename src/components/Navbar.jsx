@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import { resetUser } from "@/lib/analytics";
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -11,27 +12,34 @@ export default function Navbar() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
     const fn = () => setScrolled(window.scrollY > 20);
     window.addEventListener("scroll", fn);
     
-    // Check auth state
-    const token = localStorage.getItem("token");
-    const storedUser = localStorage.getItem("user");
-    if (token && storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (e) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
+    const timer = setTimeout(() => {
+      setMounted(true);
+      // Check auth state
+      const token = localStorage.getItem("token");
+      const storedUser = localStorage.getItem("user");
+      if (token && storedUser) {
+        try {
+          setUser(JSON.parse(storedUser));
+        } catch (e) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+        }
       }
-    }
+    }, 0);
     
-    return () => window.removeEventListener("scroll", fn);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("scroll", fn);
+    };
   }, []);
 
   const handleLogout = () => {
+    resetUser();
     localStorage.removeItem("token");
+    localStorage.removeItem("user");
     setUser(null);
     window.location.reload();
   };

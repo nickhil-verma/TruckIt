@@ -1,9 +1,12 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 const OPENFREEMAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
+const ROUTE_SOURCE_ID = "truckit-route-source";
+const ROUTE_CASING_LAYER_ID = "truckit-route-casing";
+const ROUTE_LINE_LAYER_ID = "truckit-route-line";
 
 /**
  * Normalizes coordinates into [lng, lat] GeoJSON standard format.
@@ -48,11 +51,199 @@ export default function MapLibreMapComponent({
   const markerBRef = useRef(null);
   const viaMarkersRef = useRef([]);
   const routeRequestIdRef = useRef(0);
+  const abortControllerRef = useRef(null);
+  const pendingRouteRef = useRef(null);
   const onMapClickRef = useRef(onMapClick);
+
+  const drawRouteRef = useRef(null);
 
   useEffect(() => {
     onMapClickRef.current = onMapClick;
   }, [onMapClick]);
+
+  /**
+   * Helper to check if a map instance is alive and ready for operations
+   */
+  const isMapAlive = useCallback((map) => {
+    return Boolean(
+      map &&
+      !map._removed &&
+      mapInstanceRef.current === map &&
+      map.getContainer &&
+      map.getContainer()
+    );
+  }, []);
+
+  /**
+   * Helper to check if the map style is fully loaded and ready for source/layer manipulation
+   */
+  const isMapStyleReady = useCallback((map) => {
+    return Boolean(
+      isMapAlive(map) &&
+      map.style &&
+      map.isStyleLoaded()
+    );
+  }, [isMapAlive]);
+
+  /**
+   * Safely draws or updates route line geometry on the map.
+   * If map style is not ready, stashes coordinates in pendingRouteRef and waits for style.load.
+   */
+  const drawRouteOnMap = useCallback((coordinates) => {
+    const map = mapInstanceRef.current;
+    if (!isMapAlive(map)) {
+      pendingRouteRef.current = coordinates;
+      return;
+    }
+
+    if (!isMapStyleReady(map)) {
+      pendingRouteRef.current = coordinates;
+      // Register one-time style listener if not already pending
+      const onStyleReady = () => {
+        if (pendingRouteRef.current && isMapAlive(mapInstanceRef.current)) {
+          const coords = pendingRouteRef.current;
+          pendingRouteRef.current = null;
+          if (drawRouteRef.current) {
+            drawRouteRef.current(coords);
+          }
+        }
+      };
+      map.once("style.load", onStyleReady);
+      return;
+    }
+
+    // Filter valid coordinate pairs
+    const validCoords = Array.isArray(coordinates)
+      ? coordinates.filter(
+          (c) =>
+            Array.isArray(c) &&
+            c.length >= 2 &&
+            typeof c[0] === "number" &&
+            typeof c[1] === "number" &&
+            !isNaN(c[0]) &&
+            !isNaN(c[1])
+        )
+      : [];
+
+    if (validCoords.length < 2) {
+      // Clear route if fewer than 2 valid points
+      try {
+        if (map.getSource(ROUTE_SOURCE_ID)) {
+          map.getSource(ROUTE_SOURCE_ID).setData({
+            type: "Feature",
+            properties: {},
+            geometry: { type: "LineString", coordinates: [] }
+          });
+        }
+      } catch (e) {
+        if (process.env.NODE_ENV !== "production") {
+          console.debug("Notice while clearing route GeoJSON:", e?.message);
+        }
+      }
+      return;
+    }
+
+    const geojson = {
+      type: "Feature",
+      properties: {},
+      geometry: {
+        type: "LineString",
+        coordinates: validCoords
+      }
+    };
+
+    try {
+      const existingSource = map.getSource(ROUTE_SOURCE_ID);
+      if (existingSource) {
+        existingSource.setData(geojson);
+      } else {
+        map.addSource(ROUTE_SOURCE_ID, {
+          type: "geojson",
+          data: geojson
+        });
+      }
+
+      // Outer glow/casing layer
+      if (!map.getLayer(ROUTE_CASING_LAYER_ID)) {
+        map.addLayer({
+          id: ROUTE_CASING_LAYER_ID,
+          type: "line",
+          source: ROUTE_SOURCE_ID,
+          layout: {
+            "line-join": "round",
+            "line-cap": "round"
+          },
+          paint: {
+            "line-color": "#c2410c",
+            "line-width": 8,
+            "line-opacity": 0.4
+          }
+        });
+      }
+
+      // Vibrant orange main road line
+      if (!map.getLayer(ROUTE_LINE_LAYER_ID)) {
+        map.addLayer({
+          id: ROUTE_LINE_LAYER_ID,
+          type: "line",
+          source: ROUTE_SOURCE_ID,
+          layout: {
+            "line-join": "round",
+            "line-cap": "round"
+          },
+          paint: {
+            "line-color": "#f97316",
+            "line-width": 5,
+            "line-opacity": 1
+          }
+        });
+      }
+
+      // Auto-fit bounds
+      if (validCoords.length > 0) {
+        try {
+          map.resize();
+          const bounds = new maplibregl.LngLatBounds();
+          validCoords.forEach((coord) => bounds.extend(coord));
+          map.fitBounds(bounds, {
+            padding: { top: 70, bottom: 70, left: 70, right: 70 },
+            maxZoom: 14,
+            duration: 800
+          });
+        } catch (e) {
+          // Non-fatal bounds fitting notice
+        }
+      }
+    } catch (err) {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("MapLibre route rendering notice:", err?.message);
+      }
+    }
+  }, [isMapAlive, isMapStyleReady]);
+
+  /**
+   * Clears route line data from the map safely
+   */
+  const clearRouteFromMap = useCallback(() => {
+    const map = mapInstanceRef.current;
+    if (!isMapStyleReady(map)) return;
+
+    try {
+      const source = map.getSource(ROUTE_SOURCE_ID);
+      if (source) {
+        source.setData({
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "LineString",
+            coordinates: []
+          }
+        });
+      }
+    } catch (e) {
+      // Ignored non-fatal clear error
+    }
+  }, [isMapStyleReady]);
 
   // 1. Initialize MapLibre instance
   useEffect(() => {
@@ -81,10 +272,21 @@ export default function MapLibreMapComponent({
       );
 
       const handleReady = () => {
-        setMapLoaded(true);
-        try {
-          map.resize();
-        } catch (e) {}
+        if (!map._removed && mapInstanceRef.current === map) {
+          setMapLoaded(true);
+          try {
+            map.resize();
+          } catch (e) {}
+
+          // Flush any pending route drawings once ready
+          if (pendingRouteRef.current) {
+            const pending = pendingRouteRef.current;
+            pendingRouteRef.current = null;
+            if (drawRouteRef.current) {
+              drawRouteRef.current(pending);
+            }
+          }
+        }
       };
 
       if (map.isStyleLoaded()) {
@@ -94,9 +296,22 @@ export default function MapLibreMapComponent({
         map.once("load", handleReady);
       }
 
+      // Re-apply route if style reloads (e.g. style reset or server reconnect)
+      map.on("style.load", () => {
+        if (pendingRouteRef.current && isMapAlive(map)) {
+          const pending = pendingRouteRef.current;
+          pendingRouteRef.current = null;
+          if (drawRouteRef.current) {
+            drawRouteRef.current(pending);
+          }
+        }
+      });
+
       map.on("error", (e) => {
         if (e && e.error && e.error.message && !e.error.message.includes("404")) {
-          console.warn("MapLibre map notice:", e.error.message);
+          if (process.env.NODE_ENV !== "production") {
+            console.warn("MapLibre runtime notice:", e.error.message);
+          }
         }
       });
 
@@ -107,22 +322,27 @@ export default function MapLibreMapComponent({
       });
 
       mapInstanceRef.current = map;
+
       // Trigger initial resize after container mounts
       setTimeout(() => {
-        try {
-          map.resize();
-        } catch (e) {}
+        if (isMapAlive(map)) {
+          try {
+            map.resize();
+          } catch (e) {}
+        }
       }, 100);
     } catch (err) {
-      console.error("MapLibre initialization error:", err);
-      setMapError(true);
+      if (process.env.NODE_ENV !== "production") {
+        console.error("MapLibre initialization error:", err);
+      }
+      setTimeout(() => setMapError(true), 0);
     }
 
     // Resize observer to ensure map responds immediately to layout/sidebar changes
     let resizeObserver;
-    if (window.ResizeObserver && mapContainerRef.current) {
+    if (typeof window !== "undefined" && window.ResizeObserver && mapContainerRef.current) {
       resizeObserver = new ResizeObserver(() => {
-        if (mapInstanceRef.current) {
+        if (isMapAlive(mapInstanceRef.current)) {
           mapInstanceRef.current.resize();
         }
       });
@@ -130,20 +350,47 @@ export default function MapLibreMapComponent({
     }
 
     return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
       if (resizeObserver) {
         resizeObserver.disconnect();
       }
+      if (markerARef.current) {
+        markerARef.current.remove();
+        markerARef.current = null;
+      }
+      if (markerBRef.current) {
+        markerBRef.current.remove();
+        markerBRef.current = null;
+      }
+      viaMarkersRef.current.forEach((m) => {
+        try {
+          m.remove();
+        } catch (e) {}
+      });
+      viaMarkersRef.current = [];
+
       if (map) {
         try {
           map.remove();
         } catch (err) {
-          console.warn("MapLibre cleanup warning:", err);
+          if (process.env.NODE_ENV !== "production") {
+            console.warn("MapLibre cleanup warning:", err);
+          }
         }
       }
-      mapInstanceRef.current = null;
+      if (mapInstanceRef.current === map) {
+        mapInstanceRef.current = null;
+      }
       setMapLoaded(false);
     };
-  }, []);
+  }, [isMapAlive]);
+
+  useEffect(() => {
+    drawRouteRef.current = drawRouteOnMap;
+  }, [drawRouteOnMap]);
 
   // 2. Helper to create DOM element for custom markers
   const createMarkerElement = (label, bgGradient, shadowColor, borderColor = "#ffffff") => {
@@ -193,7 +440,7 @@ export default function MapLibreMapComponent({
   // 3. Update markers and route geometry whenever points/route change
   useEffect(() => {
     const map = mapInstanceRef.current;
-    if (!map || !mapLoaded) return;
+    if (!isMapAlive(map) || !mapLoaded) return;
 
     // A. Clean up previous markers
     if (markerARef.current) {
@@ -204,7 +451,11 @@ export default function MapLibreMapComponent({
       markerBRef.current.remove();
       markerBRef.current = null;
     }
-    viaMarkersRef.current.forEach((m) => m.remove());
+    viaMarkersRef.current.forEach((m) => {
+      try {
+        m.remove();
+      } catch (e) {}
+    });
     viaMarkersRef.current = [];
 
     const lngLatA = toLngLat(pointA);
@@ -251,102 +502,7 @@ export default function MapLibreMapComponent({
       });
     }
 
-    // E. Draw Orange TruckIt Route
-    const drawRouteOnMap = (coordinates) => {
-      if (!map) return;
-
-      const geojson = {
-        type: "Feature",
-        properties: {},
-        geometry: {
-          type: "LineString",
-          coordinates: coordinates
-        }
-      };
-
-      try {
-        if (!map.getSource("truckit-route-source")) {
-          map.addSource("truckit-route-source", {
-            type: "geojson",
-            data: geojson
-          });
-        } else {
-          const src = map.getSource("truckit-route-source");
-          if (src) src.setData(geojson);
-        }
-
-        // Outer glow/casing layer
-        if (!map.getLayer("truckit-route-casing")) {
-          map.addLayer({
-            id: "truckit-route-casing",
-            type: "line",
-            source: "truckit-route-source",
-            layout: {
-              "line-join": "round",
-              "line-cap": "round"
-            },
-            paint: {
-              "line-color": "#c2410c",
-              "line-width": 8,
-              "line-opacity": 0.4
-            }
-          });
-        }
-
-        // Vibrant orange main road line
-        if (!map.getLayer("truckit-route-line")) {
-          map.addLayer({
-            id: "truckit-route-line",
-            type: "line",
-            source: "truckit-route-source",
-            layout: {
-              "line-join": "round",
-              "line-cap": "round"
-            },
-            paint: {
-              "line-color": "#f97316",
-              "line-width": 5,
-              "line-opacity": 1
-            }
-          });
-        }
-      } catch (err) {
-        console.warn("Could not add route layers:", err);
-      }
-
-      // Auto-fit bounds
-      if (coordinates.length > 0) {
-        try {
-          map.resize();
-          const bounds = new maplibregl.LngLatBounds();
-          coordinates.forEach((coord) => bounds.extend(coord));
-          map.fitBounds(bounds, {
-            padding: { top: 70, bottom: 70, left: 70, right: 70 },
-            maxZoom: 14,
-            duration: 800
-          });
-        } catch (e) {}
-      }
-    };
-
-    // Remove route layer if no route exists
-    const clearRouteFromMap = () => {
-      if (!map) return;
-      try {
-        if (map.getSource("truckit-route-source")) {
-          const emptyGeojson = {
-            type: "Feature",
-            properties: {},
-            geometry: {
-              type: "LineString",
-              coordinates: []
-            }
-          };
-          map.getSource("truckit-route-source").setData(emptyGeojson);
-        }
-      } catch (e) {}
-    };
-
+    // E. Draw route geometry
     // If parent supplied routeGeometry, convert and draw immediately
     if (routeGeometry && routeGeometry.length > 0) {
       const coords = routeGeometry.map(toLngLat).filter(Boolean);
@@ -356,36 +512,62 @@ export default function MapLibreMapComponent({
       }
     }
 
+    // Cancel any in-flight route fetch
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     // If both points exist but no routeGeometry yet, fetch from OSRM
     if (lngLatA && lngLatB) {
       const requestId = ++routeRequestIdRef.current;
       const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${lngLatA[0]},${lngLatA[1]};${lngLatB[0]},${lngLatB[1]}?overview=full&geometries=geojson`;
 
-      fetch(osrmUrl)
-        .then((res) => res.json())
+      fetch(osrmUrl, { signal: abortController.signal })
+        .then((res) => {
+          if (!res.ok) throw new Error("OSRM response not ok");
+          return res.json();
+        })
         .then((data) => {
           if (requestId !== routeRequestIdRef.current) return; // Stale request cancelled
+          if (!isMapAlive(mapInstanceRef.current)) return; // Map unmounted or stale
+
           if (data && data.code === "Ok" && data.routes && data.routes[0]) {
             const osrmCoords = data.routes[0].geometry.coordinates;
             drawRouteOnMap(osrmCoords);
           } else {
-            // Straight line fallback if OSRM is unreachable
+            // Straight line fallback if OSRM returned no routes
             drawRouteOnMap([lngLatA, lngLatB]);
           }
         })
-        .catch(() => {
-          if (requestId !== routeRequestIdRef.current) return;
+        .catch((err) => {
+          if (err.name === "AbortError" || requestId !== routeRequestIdRef.current) return;
+          if (!isMapAlive(mapInstanceRef.current)) return;
           // Fallback to direct path between points
           drawRouteOnMap([lngLatA, lngLatB]);
         });
     } else if (lngLatA || lngLatB) {
       clearRouteFromMap();
       const singlePoint = lngLatA || lngLatB;
-      map.flyTo({ center: singlePoint, zoom: 11, duration: 800 });
+      if (isMapAlive(map)) {
+        try {
+          map.flyTo({ center: singlePoint, zoom: 11, duration: 800 });
+        } catch (e) {}
+      }
     } else {
       clearRouteFromMap();
     }
-  }, [mapLoaded, pointA, pointB, viaStopsCoords, routeGeometry]);
+  }, [
+    mapLoaded,
+    pointA,
+    pointB,
+    viaStopsCoords,
+    routeGeometry,
+    drawRouteOnMap,
+    clearRouteFromMap,
+    isMapAlive
+  ]);
 
   if (mapError) {
     return (

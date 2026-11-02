@@ -5,6 +5,7 @@ import Link from "next/link";
 import toast from "react-hot-toast";
 import Navbar from "@/components/Navbar";
 import { User, Truck } from "lucide-react";
+import { identifyUser } from "@/lib/analytics";
 
 export default function Signup() {
   const [name, setName] = useState("");
@@ -56,6 +57,10 @@ export default function Signup() {
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
 
+      if (data.user) {
+        identifyUser(data.user._id || data.user.id, { role: data.user.role });
+      }
+
       toast.success("Account created successfully!");
       if (data.user.role === "driver") {
         router.push("/driver-dashboard");
@@ -99,7 +104,7 @@ export default function Signup() {
           Create Your Account
         </h2>
         <p className="mt-2 text-center text-sm text-gray-500 font-medium">
-          Join India's premium logistics platform
+          Join India&apos;s premium logistics platform
         </p>
       </div>
 

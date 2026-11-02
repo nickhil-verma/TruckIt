@@ -2,6 +2,7 @@ import { DM_Sans, Instrument_Serif, Dancing_Script } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import Script from "next/script";
+import MixpanelProvider from "@/components/MixpanelProvider";
 
 const dmSans = DM_Sans({
   variable: "--font-dm-sans",
@@ -51,7 +52,7 @@ export default function RootLayout({ children }) {
       </head>
       <body className="min-h-full flex flex-col font-sans" suppressHydrationWarning>
         <Toaster position="top-center" />
-        {children}
+        <MixpanelProvider>{children}</MixpanelProvider>
       </body>
     </html>
   );

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import Navbar from "@/components/Navbar";
+import { identifyUser } from "@/lib/analytics";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -53,6 +54,10 @@ export default function Login() {
       
       // Store user details just in case
       localStorage.setItem("user", JSON.stringify(data.user));
+
+      if (data.user) {
+        identifyUser(data.user._id || data.user.id, { role: data.user.role });
+      }
 
       toast.success("Welcome back!");
       if (data.user.role === "driver") {
@@ -149,7 +154,7 @@ export default function Login() {
 
           <div className="mt-6 text-center">
             <Link href="/signup" className="text-sm text-orange-600 hover:text-orange-500 font-semibold transition-colors">
-              Don't have an account? Sign up
+              Don&apos;t have an account? Sign up
             </Link>
           </div>
         </div>

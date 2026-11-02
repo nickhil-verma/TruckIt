@@ -243,8 +243,11 @@ export default function TruckItApp() {
           category: "booking",
           label: bookingMode === "empty" ? "empty_return" : "fresh_booking",
           customParams: {
+            origin: from.split(",")[0].trim(),
+            destination: to.split(",")[0].trim(),
             truck_type: selectedTruckData.label,
             distance_km: Math.round(calculatedDistance),
+            booking_mode: bookingMode,
           },
         });
       }
@@ -277,6 +280,8 @@ export default function TruckItApp() {
       value: totalPrice,
       currency: "INR",
       customParams: {
+        origin: from.split(",")[0].trim(),
+        destination: to.split(",")[0].trim(),
         truck_type: selectedTruckData.label,
         booking_mode: bookingMode,
         distance_km: Math.round(distanceKm),
@@ -379,6 +384,7 @@ export default function TruckItApp() {
                 currency: "INR",
                 transaction_id: transactionId,
                 customParams: {
+                  booking_id: verifyData?.trip?._id || transactionId,
                   truck_type: selectedTruckData.label,
                   booking_mode: bookingMode,
                   distance_km: Math.round(distanceKm),
@@ -401,6 +407,10 @@ export default function TruckItApp() {
               action: "booking_cancelled",
               category: "booking",
               label: "payment_cancelled",
+              customParams: {
+                truck_type: selectedTruckData.label,
+                booking_mode: bookingMode,
+              },
             });
             toast("Payment cancelled or closed", { icon: "ℹ️" });
           }
@@ -416,6 +426,10 @@ export default function TruckItApp() {
           label: "razorpay_payment_failed",
           value: totalPrice,
           currency: "INR",
+          customParams: {
+            reason: failureResponse.error?.reason || "payment_declined",
+            booking_mode: bookingMode,
+          },
         });
         toast.error(`Payment failed: ${failureResponse.error?.description || "Payment was declined"}`);
       });

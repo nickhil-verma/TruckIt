@@ -5,6 +5,7 @@ import Navbar from "@/components/Navbar";
 import toast from "react-hot-toast";
 import { LayoutDashboard, Truck, CheckCircle, MessageSquare, CreditCard, Settings, Search, Check, CheckCheck, Clock } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
+import { trackEvent } from "@/lib/analytics";
 
 function loadRazorpayScript() {
   return new Promise((resolve) => {
@@ -28,6 +29,7 @@ export default function Dashboard() {
   const [selectedTrip, setSelectedTrip] = useState(null);
   const [selectedInvoiceTrip, setSelectedInvoiceTrip] = useState(null);
   const [selectedDriverProfile, setSelectedDriverProfile] = useState(null);
+  const trackedPurchasesRef = useRef(new Set());
   
   // Chat specific state
   const [messages, setMessages] = useState([]);
@@ -102,6 +104,14 @@ export default function Dashboard() {
       });
       if (res.ok) {
         toast.success("Trip request cancelled");
+        trackEvent({
+          action: "booking_cancelled",
+          category: "trip",
+          label: "customer_cancelled_trip",
+          customParams: {
+            trip_id: tripId,
+          },
+        });
         setTrips(prev => prev.filter(t => t._id !== tripId));
       } else {
         const data = await res.json();
@@ -192,6 +202,23 @@ export default function Dashboard() {
             }
 
             toast.success("Payment completed successfully in Razorpay Test Mode! 💳🎉");
+
+            const transactionId = response.razorpay_payment_id || tripToPay._id;
+            if (transactionId && !trackedPurchasesRef.current.has(transactionId)) {
+              trackedPurchasesRef.current.add(transactionId);
+              trackEvent({
+                action: "purchase",
+                category: "booking",
+                value: tripToPay.price,
+                currency: "INR",
+                transaction_id: transactionId,
+                customParams: {
+                  booking_id: tripToPay._id,
+                  truck_type: tripToPay.truckType,
+                },
+              });
+            }
+
             setTrips(prev => prev.map(t => t._id === tripToPay._id ? { ...t, ...verifyData.trip } : t));
             if (selectedInvoiceTrip && selectedInvoiceTrip._id === tripToPay._id) {
               setSelectedInvoiceTrip(verifyData.trip);
@@ -203,6 +230,14 @@ export default function Dashboard() {
         },
         modal: {
           ondismiss: () => {
+            trackEvent({
+              action: "booking_cancelled",
+              category: "payment",
+              label: "dashboard_payment_cancelled",
+              customParams: {
+                trip_id: tripToPay._id,
+              },
+            });
             toast("Payment cancelled or closed", { icon: "ℹ️" });
           }
         }
@@ -210,6 +245,17 @@ export default function Dashboard() {
 
       const rzp = new window.Razorpay(options);
       rzp.on("payment.failed", (err) => {
+        trackEvent({
+          action: "payment_failed",
+          category: "payment",
+          label: "dashboard_payment_failed",
+          value: tripToPay.price,
+          currency: "INR",
+          customParams: {
+            trip_id: tripToPay._id,
+            reason: err?.error?.reason || "payment_declined",
+          },
+        });
         toast.error(`Payment failed: ${err.error?.description || "Declined"}`);
       });
       rzp.open();
@@ -782,7 +828,7 @@ export default function Dashboard() {
                               <span className="text-xs font-bold text-gray-500">({selectedTrip.customerRating} / 5)</span>
                             </div>
                             {selectedTrip.customerReview && (
-                              <p className="text-xs text-gray-500 italic mt-3 bg-white/70 py-2 px-3 rounded-xl border border-emerald-100/50">"{selectedTrip.customerReview}"</p>
+                              <p className="text-xs text-gray-500 italic mt-3 bg-white/70 py-2 px-3 rounded-xl border border-emerald-100/50">&quot;{selectedTrip.customerReview}&quot;</p>
                             )}
                           </div>
                         ) : (
