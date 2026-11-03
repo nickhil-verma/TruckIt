@@ -245,7 +245,7 @@ export default function TruckItApp() {
           customParams: {
             origin: from.split(",")[0].trim(),
             destination: to.split(",")[0].trim(),
-            truck_type: selectedTruckData.label,
+            vehicle_type: selectedTruckData.label,
             distance_km: Math.round(calculatedDistance),
             booking_mode: bookingMode,
           },
@@ -271,22 +271,6 @@ export default function TruckItApp() {
     const userData = JSON.parse(localStorage.getItem("user") || "{}");
 
     setBookingLoading(true);
-
-    // Track booking started event
-    trackEvent({
-      action: "booking_started",
-      category: "booking",
-      label: selectedTruckData.label,
-      value: totalPrice,
-      currency: "INR",
-      customParams: {
-        origin: from.split(",")[0].trim(),
-        destination: to.split(",")[0].trim(),
-        truck_type: selectedTruckData.label,
-        booking_mode: bookingMode,
-        distance_km: Math.round(distanceKm),
-      },
-    });
 
     try {
       // 1. Ensure Razorpay Checkout script is loaded
@@ -314,6 +298,15 @@ export default function TruckItApp() {
       if (!orderRes.ok) {
         throw new Error(orderData.error || "Failed to initialize payment with Razorpay");
       }
+
+      trackEvent({
+        action: "booking_started",
+        customParams: {
+          origin: from.split(",")[0].trim(),
+          destination: to.split(",")[0].trim(),
+          vehicle_type: selectedTruckData.label,
+        },
+      });
 
       // 3. Launch Razorpay Checkout Modal (in test mode)
       const options = {
@@ -375,19 +368,15 @@ export default function TruckItApp() {
 
             // Track purchase event (prevent duplicates for same payment/booking)
             const transactionId = response.razorpay_payment_id || verifyData?.trip?.razorpayPaymentId || verifyData?.trip?._id;
-            if (transactionId && !trackedPurchasesRef.current.has(transactionId)) {
-              trackedPurchasesRef.current.add(transactionId);
+            if (verifyData?.trip?._id && !trackedPurchasesRef.current.has(verifyData.trip._id)) {
+              trackedPurchasesRef.current.add(verifyData.trip._id);
               trackEvent({
                 action: "purchase",
-                category: "booking",
-                value: totalPrice,
-                currency: "INR",
-                transaction_id: transactionId,
                 customParams: {
-                  booking_id: verifyData?.trip?._id || transactionId,
-                  truck_type: selectedTruckData.label,
-                  booking_mode: bookingMode,
-                  distance_km: Math.round(distanceKm),
+                  booking_id: verifyData.trip._id,
+                  amount: verifyData.trip.price,
+                  currency: "INR",
+                  payment_method: verifyData.trip.paymentMethod || "razorpay",
                 },
               });
             }
@@ -403,15 +392,6 @@ export default function TruckItApp() {
         modal: {
           ondismiss: function () {
             setBookingLoading(false);
-            trackEvent({
-              action: "booking_cancelled",
-              category: "booking",
-              label: "payment_cancelled",
-              customParams: {
-                truck_type: selectedTruckData.label,
-                booking_mode: bookingMode,
-              },
-            });
             toast("Payment cancelled or closed", { icon: "ℹ️" });
           }
         }
@@ -423,12 +403,8 @@ export default function TruckItApp() {
         trackEvent({
           action: "payment_failed",
           category: "payment",
-          label: "razorpay_payment_failed",
-          value: totalPrice,
-          currency: "INR",
           customParams: {
-            reason: failureResponse.error?.reason || "payment_declined",
-            booking_mode: bookingMode,
+            failure_reason: failureResponse.error?.reason || "payment_declined",
           },
         });
         toast.error(`Payment failed: ${failureResponse.error?.description || "Payment was declined"}`);

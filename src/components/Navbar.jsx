@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
-import { resetUser } from "@/lib/analytics";
+import { resetUser, trackEvent } from "@/lib/analytics";
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -37,6 +37,7 @@ export default function Navbar() {
   }, []);
 
   const handleLogout = () => {
+    trackEvent({ action: "logout", customParams: { logout_method: "navbar" } });
     resetUser();
     localStorage.removeItem("token");
     localStorage.removeItem("user");

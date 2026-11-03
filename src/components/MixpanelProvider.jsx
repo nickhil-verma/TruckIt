@@ -2,7 +2,9 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
-import { initMixpanel, trackEvent, identifyUser } from "@/lib/mixpanel";
+import { initMixpanel, identifyUser } from "@/lib/mixpanel";
+import { initAmplitude } from "@/lib/amplitude";
+import { pageview } from "@/lib/analytics";
 
 export default function MixpanelProvider({ children }) {
   const pathname = usePathname();
@@ -10,6 +12,7 @@ export default function MixpanelProvider({ children }) {
 
   useEffect(() => {
     initMixpanel();
+    initAmplitude();
 
     // Re-sync existing authenticated session if present in client storage
     try {
@@ -37,9 +40,7 @@ export default function MixpanelProvider({ children }) {
     }
     lastTrackedPathRef.current = pathname;
 
-    trackEvent("page_view", {
-      page_path: pathname,
-    });
+    pageview(pathname, document.title);
   }, [pathname]);
 
   return <>{children}</>;

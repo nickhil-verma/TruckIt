@@ -46,6 +46,7 @@ export default function RootLayout({ children }) {
 
             gtag('config', 'G-9H83B3QSWN', {
               page_path: window.location.pathname,
+              send_page_view: false,
             });
           `}
         </Script>

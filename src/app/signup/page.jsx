@@ -5,7 +5,7 @@ import Link from "next/link";
 import toast from "react-hot-toast";
 import Navbar from "@/components/Navbar";
 import { User, Truck } from "lucide-react";
-import { identifyUser } from "@/lib/analytics";
+import { identifyUser, trackEvent } from "@/lib/analytics";
 
 export default function Signup() {
   const [name, setName] = useState("");
@@ -60,6 +60,7 @@ export default function Signup() {
       if (data.user) {
         identifyUser(data.user._id || data.user.id, { role: data.user.role });
       }
+      trackEvent({ action: "sign_up", customParams: { signup_method: "email" } });
 
       toast.success("Account created successfully!");
       if (data.user.role === "driver") {

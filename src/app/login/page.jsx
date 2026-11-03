@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import Navbar from "@/components/Navbar";
-import { identifyUser } from "@/lib/analytics";
+import { identifyUser, trackEvent } from "@/lib/analytics";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -58,6 +58,7 @@ export default function Login() {
       if (data.user) {
         identifyUser(data.user._id || data.user.id, { role: data.user.role });
       }
+      trackEvent({ action: "login", customParams: { login_method: "email" } });
 
       toast.success("Welcome back!");
       if (data.user.role === "driver") {

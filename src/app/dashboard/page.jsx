@@ -106,10 +106,9 @@ export default function Dashboard() {
         toast.success("Trip request cancelled");
         trackEvent({
           action: "booking_cancelled",
-          category: "trip",
-          label: "customer_cancelled_trip",
           customParams: {
-            trip_id: tripId,
+            booking_id: tripId,
+            cancellation_reason: "customer_requested",
           },
         });
         setTrips(prev => prev.filter(t => t._id !== tripId));
@@ -208,13 +207,11 @@ export default function Dashboard() {
               trackedPurchasesRef.current.add(transactionId);
               trackEvent({
                 action: "purchase",
-                category: "booking",
-                value: tripToPay.price,
-                currency: "INR",
-                transaction_id: transactionId,
                 customParams: {
                   booking_id: tripToPay._id,
-                  truck_type: tripToPay.truckType,
+                  amount: verifyData.trip.price,
+                  currency: "INR",
+                  payment_method: verifyData.trip.paymentMethod || "razorpay",
                 },
               });
             }
@@ -230,14 +227,6 @@ export default function Dashboard() {
         },
         modal: {
           ondismiss: () => {
-            trackEvent({
-              action: "booking_cancelled",
-              category: "payment",
-              label: "dashboard_payment_cancelled",
-              customParams: {
-                trip_id: tripToPay._id,
-              },
-            });
             toast("Payment cancelled or closed", { icon: "ℹ️" });
           }
         }
@@ -248,12 +237,9 @@ export default function Dashboard() {
         trackEvent({
           action: "payment_failed",
           category: "payment",
-          label: "dashboard_payment_failed",
-          value: tripToPay.price,
-          currency: "INR",
           customParams: {
-            trip_id: tripToPay._id,
-            reason: err?.error?.reason || "payment_declined",
+            booking_id: tripToPay._id,
+            failure_reason: err?.error?.reason || "payment_declined",
           },
         });
         toast.error(`Payment failed: ${err.error?.description || "Declined"}`);

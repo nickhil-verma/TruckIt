@@ -9,24 +9,37 @@ import {
   identifyUser as mixpanelIdentify,
   resetMixpanelUser as mixpanelReset
 } from "@/lib/mixpanel";
+import {
+  trackAmplitudeEvent,
+  identifyAmplitudeUser,
+  resetAmplitudeUser,
+} from "@/lib/amplitude";
 
 export const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_ID || "G-9H83B3QSWN";
 
 /**
- * Tracks custom page views in GA4 (for client-side routing).
- * Note: Mixpanel page views are managed in MixpanelProvider with route deduplication.
+ * Tracks a single custom page view in every configured provider.
  */
-export const pageview = (url) => {
+export const pageview = (url, title = "") => {
+  if (typeof window === "undefined") return;
+  const properties = { page_path: url, page_title: title };
   if (typeof window !== "undefined" && window.gtag) {
     try {
-      window.gtag("config", GA_MEASUREMENT_ID, {
+      window.gtag("event", "page_view", {
         page_path: url,
+        page_title: title,
       });
     } catch (err) {
       if (process.env.NODE_ENV !== "production") {
         console.debug("GA4 pageview notice:", err);
       }
     }
+  }
+  try { trackMixpanelEvent("page_view", properties); } catch (err) {
+    if (process.env.NODE_ENV !== "production") console.debug("Mixpanel pageview notice:", err);
+  }
+  try { trackAmplitudeEvent("page_view", properties); } catch (err) {
+    if (process.env.NODE_ENV !== "production") console.debug("Amplitude pageview notice:", err);
   }
 };
 
@@ -77,6 +90,14 @@ export const trackEvent = ({
       console.debug("Mixpanel event notice:", err);
     }
   }
+
+  try {
+    trackAmplitudeEvent(action, eventPayload);
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production") {
+      console.debug("Amplitude event notice:", err);
+    }
+  }
 };
 
 /**
@@ -91,6 +112,14 @@ export const identifyUser = (userId, traits = {}) => {
   } catch (err) {
     if (process.env.NODE_ENV !== "production") {
       console.debug("Mixpanel identify notice:", err);
+    }
+  }
+
+  try {
+    identifyAmplitudeUser(String(userId), { role: traits.role });
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production") {
+      console.debug("Amplitude identify notice:", err);
     }
   }
 
@@ -119,6 +148,22 @@ export const resetUser = () => {
   } catch (err) {
     if (process.env.NODE_ENV !== "production") {
       console.debug("Mixpanel reset notice:", err);
+    }
+  }
+  try {
+    resetAmplitudeUser();
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production") {
+      console.debug("Amplitude reset notice:", err);
+    }
+  }
+  if (window.gtag) {
+    try {
+      window.gtag("config", GA_MEASUREMENT_ID, { user_id: null });
+    } catch (err) {
+      if (process.env.NODE_ENV !== "production") {
+        console.debug("GA4 user reset notice:", err);
+      }
     }
   }
 };

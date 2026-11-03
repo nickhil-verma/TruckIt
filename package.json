@@ -10,6 +10,7 @@
     "seed": "node seed.mjs"
   },
   "dependencies": {
+    "@amplitude/analytics-browser": "^2.49.0",
     "@gsap/react": "^2.1.2",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
