@@ -2,9 +2,10 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
-import { initMixpanel, identifyUser } from "@/lib/mixpanel";
+import { initMixpanel } from "@/lib/mixpanel";
 import { initAmplitude } from "@/lib/amplitude";
-import { pageview } from "@/lib/analytics";
+import { initPostHog } from "@/lib/posthog";
+import { identifyUser, pageview } from "@/lib/analytics";
 
 export default function MixpanelProvider({ children }) {
   const pathname = usePathname();
@@ -13,6 +14,7 @@ export default function MixpanelProvider({ children }) {
   useEffect(() => {
     initMixpanel();
     initAmplitude();
+    initPostHog();
 
     // Re-sync existing authenticated session if present in client storage
     try {

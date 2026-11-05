@@ -1,6 +1,6 @@
 /**
  * Unified Analytics Utility Helper
- * Supports Google Analytics 4 (GA4) and Mixpanel concurrently.
+ * Dispatches analytics events to GA4, Mixpanel, Amplitude, and PostHog.
  * GA4 Measurement ID: G-9H83B3QSWN
  */
 
@@ -14,6 +14,11 @@ import {
   identifyAmplitudeUser,
   resetAmplitudeUser,
 } from "@/lib/amplitude";
+import {
+  capturePostHogEvent,
+  identifyPostHogUser,
+  resetPostHogUser,
+} from "@/lib/posthog";
 
 export const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_ID || "G-9H83B3QSWN";
 
@@ -41,10 +46,13 @@ export const pageview = (url, title = "") => {
   try { trackAmplitudeEvent("page_view", properties); } catch (err) {
     if (process.env.NODE_ENV !== "production") console.debug("Amplitude pageview notice:", err);
   }
+  try { capturePostHogEvent("page_view", properties); } catch (err) {
+    if (process.env.NODE_ENV !== "production") console.debug("PostHog pageview notice:", err);
+  }
 };
 
 /**
- * Tracks business events simultaneously in GA4 and Mixpanel.
+ * Tracks business events in every configured provider.
  * Prevents analytics exceptions from breaking application workflows.
  */
 export const trackEvent = ({
@@ -98,6 +106,14 @@ export const trackEvent = ({
       console.debug("Amplitude event notice:", err);
     }
   }
+
+  try {
+    capturePostHogEvent(action, eventPayload);
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production") {
+      console.debug("PostHog event notice:", err);
+    }
+  }
 };
 
 /**
@@ -120,6 +136,14 @@ export const identifyUser = (userId, traits = {}) => {
   } catch (err) {
     if (process.env.NODE_ENV !== "production") {
       console.debug("Amplitude identify notice:", err);
+    }
+  }
+
+  try {
+    identifyPostHogUser(String(userId), { role: traits.role });
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production") {
+      console.debug("PostHog identify notice:", err);
     }
   }
 
@@ -155,6 +179,13 @@ export const resetUser = () => {
   } catch (err) {
     if (process.env.NODE_ENV !== "production") {
       console.debug("Amplitude reset notice:", err);
+    }
+  }
+  try {
+    resetPostHogUser();
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production") {
+      console.debug("PostHog reset notice:", err);
     }
   }
   if (window.gtag) {
